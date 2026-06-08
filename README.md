@@ -82,16 +82,18 @@ npm run run-batch data/input.txt
 2. **STAGE 1**：抓 profile metadata（IG profile-scraper + TT clockworks `resultsPerPage=1`）
 3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 / bio 地区非 DE/AT → 直接 ❌，不进 STAGE 2
 4. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count，TT clockworks 20 视频）
-5. **判定**（v0.4 微调规则 caption 50% / 评论 60%）
-6. **输出表格**按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
-7. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
+5. **caption 判定**（v0.4 微调规则 caption 50%）；bio 在 DE/AT 但 caption <50% 的标 ⚠️
+6. **STAGE 3**（仅当有 ⚠️ 时）：对 ⚠️ 用户调评论 API（TT `thescrapelab/tiktok-comments-scraper` + IG `apify/instagram-comment-scraper`），每帖 10 条评论，按 ≥60% 德语二次判定
+7. **输出表格**按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
+8. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
 
-成本对比（14 unique 达人，9 个短路淘汰）：
+成本对比（14 unique 达人，9 个短路淘汰，0 个 ⚠️）：
 
 | 方案 | ¥ |
 |------|---|
 | 旧手动流程 | ~12 |
 | run-batch（自动短路 + 20 帖 + detailedData）| **~3-4** |
+| run-batch + STAGE 3（每 ⚠️ 约 +¥3-4）| 取决于 ⚠️ 数量 |
 
 ### 三、其他单步脚本（按需）
 
