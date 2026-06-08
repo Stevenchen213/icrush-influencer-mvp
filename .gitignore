@@ -1,0 +1,30 @@
+# 密钥
+.env
+.env.local
+.env.*.local
+
+# 抓回来的数据（不上传：太大 + 含个人信息）
+data/*
+!data/.gitkeep
+*.json
+!package.json
+!package-lock.json
+
+# 截图 / 临时文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Node
+node_modules/
+npm-debug.log*
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Apify 本地临时文件
+.playwright-mcp/
