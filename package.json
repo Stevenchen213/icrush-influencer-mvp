@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "run-batch": "node --env-file=.env scripts/run_batch.mjs",
     "fetch-comments": "node --env-file=.env scripts/fetch_comments.mjs",
     "analyze": "node scripts/analyze.mjs",
     "analyze-comments": "node scripts/analyze_comments.mjs",

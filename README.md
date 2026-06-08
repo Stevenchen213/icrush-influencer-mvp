@@ -70,23 +70,39 @@ npm install
 
 ### 二、跑一批达人（典型流程）
 
-> **当前阶段是 MVP**：scripts 里的某些路径是硬编码的 `C:\Users\yaxua\...`，需要你按自己环境调整。下一版会改成参数化。
+把 profile URL 一行一个写到 `data/input.txt`（或者用 stdin），然后：
 
 ```bash
-# 步骤 1：先用 Claude Code + Apify MCP 抓 profile/post 数据
-#         （这部分目前手动通过对话触发，见 docs/workflow.md）
-
-# 步骤 2：抓评论（Apify API 直连，不经 MCP）
-npm run fetch-comments
-
-# 步骤 3：分析
-npm run analyze
-
-# 步骤 4：输出最终表
-npm run final-table
+npm run run-batch data/input.txt
 ```
 
-### 三、看历次结果
+这一条命令会自动：
+
+1. **解析 URL**（支持 IG `/<user>/` 和 TT `/@<user>` 两种格式，去重 + 保留输入顺序）
+2. **STAGE 1**：抓 profile metadata（IG profile-scraper + TT clockworks `resultsPerPage=1`）
+3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 / bio 地区非 DE/AT → 直接 ❌，不进 STAGE 2
+4. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count，TT clockworks 20 视频）
+5. **判定**（v0.4 微调规则 caption 50% / 评论 60%）
+6. **输出表格**按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
+7. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
+
+成本对比（14 unique 达人，9 个短路淘汰）：
+
+| 方案 | ¥ |
+|------|---|
+| 旧手动流程 | ~12 |
+| run-batch（自动短路 + 20 帖 + detailedData）| **~3-4** |
+
+### 三、其他单步脚本（按需）
+
+```bash
+npm run analyze            # 只跑判定，用 data/ 里已有的 JSON（不调 Apify）
+npm run fetch-comments     # 拉一个评论 dataset（需先填 TT_COMMENTS_DATASET / IG_COMMENTS_DATASET 环境变量）
+npm run analyze-comments   # 评论语言占比检查（② 评论 60% 规则）
+npm run extract-urls       # 从 TT profile dataset 抽视频 URL 喂给评论 scraper
+```
+
+### 四、看历次结果
 
 `results/` 目录下每个文件是一次测试的快照。
 
