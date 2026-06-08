@@ -2,22 +2,18 @@
 /**
  * 完整批量判定流水线（v0.4 微调阈值 50%/60%）
  *
- * 优化点（vs 手动跑）：
- * 1. profile-first 短路：先抓 profile metadata（cheap），帖数<200 / 职业=艺术家律师 / 私密 直接 PASS，不抓 posts/videos
- * 2. TT 用 clockworks resultsPerPage=1 拿 profile，再 resultsPerPage=20 抓 survivors 的视频
- * 3. IG 直接用 detailedData（含 videoPlayCount），不浪费 basicData 重跑
- * 4. 抓 20 条（符合 v0.4 微调"近 20 条"规则），不是 30
- * 5. 输出按用户粘贴顺序（保留重复行）
- * 6. 自动存 data/ 和 results/<date>_batch<N>_<seq>.md
- * 7. 末尾打印真实 Apify 成本（USD + ¥ ≈）
+ * 流程：
+ *   STAGE 1: profile metadata（IG profile-scraper + TT clockworks resultsPerPage=1）
+ *   ↓ 短路淘汰：帖数<200/职业=艺术家律师/私密/粉丝越界/bio地区非DE-AT 直接 ❌
+ *   STAGE 2: survivors 抓 20 posts（IG detailedData 含 view count，TT clockworks）
+ *   ↓ 按 caption 判定（① ≥50%）；⚠️ = bio 在 DE/AT 但 caption <50%
+ *   STAGE 3（仅当有 ⚠️ 时）：⚠️ 用户调评论 API（每视频/帖 10 条，表情不计入）
+ *   ↓ 评论 ≥60% → ✅/🟡（看 avgViews+fans）；<60% → ❌；不足 → 还是 ⚠️
+ *   输出按用户粘贴顺序，存 results/<date>_batch<N>_<seq>.md，末尾打印真实 Apify 成本
  *
  * 用法：
  *   node --env-file=.env scripts/run_batch.mjs data/input.txt
  *   或: echo "https://www.instagram.com/x/" | node --env-file=.env scripts/run_batch.mjs -
- *
- * 输入文件格式：每行一个 profile URL
- *   https://www.instagram.com/<username>/
- *   https://www.tiktok.com/@<username>
  */
 
 import fs from 'fs';
@@ -30,6 +26,7 @@ if (!TOKEN) throw new Error('APIFY_TOKEN 未设置（用 --env-file=.env）');
 const CAPTION_THRESHOLD = 50;
 const COMMENT_THRESHOLD = 60;
 const POSTS_LIMIT = 20;
+const COMMENTS_PER_POST = 10;
 const POSTS_MIN = 200;
 const FAN_MIN = 1000;
 const FAN_MAX = { TT: 500000, IG: 300000 };
@@ -59,7 +56,7 @@ function parseURL(url) {
 }
 
 // === Apify API ===
-const apifyRuns = []; // 收集所有 runId 用于末尾算成本
+const apifyRuns = [];
 
 async function startActor(actor, input) {
   const url = `https://api.apify.com/v2/acts/${actor.replace('/', '~')}/runs?token=${TOKEN}`;
@@ -96,9 +93,9 @@ async function fetchDataset(datasetId) {
 }
 
 // === 语言检测（与 analyze.mjs 同步） ===
-const germanWords = new Set('ich,ist,das,die,der,den,dem,des,mit,und,auf,ein,eine,einen,oder,was,wie,sind,haben,aber,auch,nicht,nur,wenn,sich,dass,sie,für,mein,meine,meinen,kann,mehr,noch,mal,so,aus,zu,von,als,bei,zur,beim,ihr,euch,wir,heute,immer,ihre,ihren,wer,wo,warum,wieso,vom,zum,dich,nichts,etwas,keine,wird,würde,schon,dann,jetzt,wieder,sehr,viel,viele,vielen,danke,liebe,herz,leben,alle,allen,allem,alles,man,mir,dir,bin,bist,war,waren,am,im,um,wegen,ohne,nach,vor,ganz,kein,damit,weil,denn,seid,seit,dabei,dazu,hier,dort,einmal,zwischen,endlich,während,solange,obwohl,trotzdem,vielleicht,gerne,genau,wirklich,niemals,morgen,gestern,übermorgen,gut,besser,beste,schön,schöne,toll,super,prima,klasse,okay,euer,eure,mädchen,jungs,frauen,männer,leute,menschen,freunde,familie,mama,papa,tochter,sohn,schwester,bruder,neu,neue,neues,alt,alte,altes,jung,junge,erste,zweite,dritte,letzte,geht,kommt,machen,machte,gemacht,tun,tat,getan,sagen,sagte,gesagt,sehen,sah,gesehen,wollen,wollte,gewollt,müssen,musste,gemusst,sollen,sollte,gesollt,dürfen,durfte,gedurft,hätte,könnte,wäre,würde,willst,wirst,werden,werde,wurde,ihm,ihn,ihnen,ihres,ihrer,seine,seiner,seines,unser,unsere,mode,schmuck,outfit,look,herzlich,liebsten,aknesafe,akne,abspeichern,kanzlei,notar,notarin,rechtswahl,testament,beitrag,infos,rechtlichen,wusstet,jedem,tag,chance,schönste,lebens,girlie,girl,schauspielerin,willkommen,probiert,prinzessin,königin'.split(','));
+const germanWords = new Set('ich,ist,das,die,der,den,dem,des,mit,und,auf,ein,eine,einen,oder,was,wie,sind,haben,aber,auch,nicht,nur,wenn,sich,dass,sie,für,mein,meine,meinen,kann,mehr,noch,mal,so,aus,zu,von,als,bei,zur,beim,ihr,euch,wir,heute,immer,ihre,ihren,wer,wo,warum,wieso,vom,zum,dich,nichts,etwas,keine,wird,würde,schon,dann,jetzt,wieder,sehr,viel,viele,vielen,danke,liebe,herz,leben,alle,allen,allem,alles,man,mir,dir,bin,bist,war,waren,am,im,um,wegen,ohne,nach,vor,ganz,kein,damit,weil,denn,seid,seit,dabei,dazu,hier,dort,einmal,zwischen,endlich,während,solange,obwohl,trotzdem,vielleicht,gerne,genau,wirklich,niemals,morgen,gestern,übermorgen,gut,besser,beste,schön,schöne,toll,super,prima,klasse,okay,euer,eure,mädchen,jungs,frauen,männer,leute,menschen,freunde,familie,mama,papa,tochter,sohn,schwester,bruder,neu,neue,neues,alt,alte,altes,jung,junge,erste,zweite,dritte,letzte,geht,kommt,machen,machte,gemacht,tun,tat,getan,sagen,sagte,gesagt,sehen,sah,gesehen,wollen,wollte,gewollt,müssen,musste,gemusst,sollen,sollte,gesollt,dürfen,durfte,gedurft,hätte,könnte,wäre,würde,willst,wirst,werden,werde,wurde,ihm,ihn,ihnen,ihres,ihrer,seine,seiner,seines,unser,unsere,mode,schmuck,outfit,look,herzlich,liebsten,aknesafe,akne,abspeichern,kanzlei,notar,notarin,rechtswahl,testament,beitrag,infos,rechtlichen,wusstet,jedem,tag,chance,schönste,lebens,girlie,girl,schauspielerin,willkommen,probiert,prinzessin,königin,wunderschön,wunderschöne,wunderschönen,wunderschönes,glückwunsch,geburtstag,natürlich,traum,süß,hübsch,wahnsinn,mega,geil,wow,steht'.split(','));
 
-const englishWords = new Set('the,and,you,with,is,of,for,it,this,that,have,are,was,were,my,be,on,at,in,to,a,an,me,we,they,their,them,these,those,just,so,what,where,when,why,how,do,does,did,can,could,should,would,will,today,always,never,very,much,many,about,out,over,under,from,some,any,all,no,yes,one,two,three,your,his,her,its,him,she,he,i,love,like,life,girl,boy,people,friend,family,mom,dad,sister,brother,new,old,young,first,last,make,said,say,see,want,need,must,should,happy,sad,beautiful,cute,amazing,perfect,best,better,good,great,nice,really,actually,definitely,probably,maybe,sometimes,recipe,dress,jewelry,look,feel,feeling,tips,outfits,content,sharing,wearing,things,agenda,cleaning,streets,viennese,baby,girls,boys,women,men'.split(','));
+const englishWords = new Set('the,and,you,with,is,of,for,it,this,that,have,are,was,were,my,be,on,at,in,to,a,an,me,we,they,their,them,these,those,just,so,what,where,when,why,how,do,does,did,can,could,should,would,will,today,always,never,very,much,many,about,out,over,under,from,some,any,all,no,yes,one,two,three,your,his,her,its,him,she,he,i,love,like,life,girl,boy,people,friend,family,mom,dad,sister,brother,new,old,young,first,last,make,said,say,see,want,need,must,should,happy,sad,beautiful,cute,amazing,perfect,best,better,good,great,nice,really,actually,definitely,probably,maybe,sometimes,recipe,dress,jewelry,look,feel,feeling,tips,outfits,content,sharing,wearing,things,agenda,cleaning,streets,viennese,baby,girls,boys,women,men,wow,omg,queen,king,vibes,aesthetic,iconic,obsessed,gorgeous,stunning,adore,fabulous,pretty,lovely'.split(','));
 
 function detectLang(text) {
   if (!text || text.trim().length < 5) return 'unknown';
@@ -119,6 +116,28 @@ function detectLang(text) {
   if (e > g * 1.5) return 'en';
   if (g > e) return 'de';
   return 'en';
+}
+
+// 简化版（用于短评论 IG）
+function detectCommentLang(text) {
+  if (!text) return 'unknown';
+  const t = text.trim();
+  if (t.length < 2) return 'unknown';
+  if (/^[\W_\s]+$/.test(t)) return 'unknown'; // emoji 纯符号
+  const lower = t.toLowerCase();
+  const clean = lower.replace(/https?:\/\/\S+/g, '').replace(/[@#]\w+/g, '');
+  if (/[äöüß]/.test(clean)) return 'de';
+  const words = clean.split(/[\s\W]+/).filter(w => w.length >= 2);
+  if (words.length < 1) return 'unknown';
+  let g = 0, e = 0;
+  for (const w of words) {
+    if (germanWords.has(w)) g++;
+    if (englishWords.has(w)) e++;
+  }
+  if (g === 0 && e === 0) return 'unknown';
+  if (g >= e * 1.2) return 'de';
+  if (e > g * 1.2) return 'en';
+  return g > 0 ? 'de' : 'en';
 }
 
 const austrianCities = ['wien','vienna','salzburg','graz','innsbruck','linz','klagenfurt','tirol','tyrol','österreich','austria'];
@@ -143,7 +162,6 @@ function detectOccupation(bio, category) {
   return null;
 }
 
-// === 短路（profile-only 数据足够判定的条件） ===
 function shortCircuit(platform, p) {
   if (p.occupation) return { fail: true, reason: `职业=${p.occupation === 'Lawyer' ? '律师' : '艺术家'}（直接 PASS）` };
   if (p.private) return { fail: true, reason: '私密账户' };
@@ -156,8 +174,8 @@ function shortCircuit(platform, p) {
   return { fail: false };
 }
 
-// === 完整判定（含 caption + avgViews）===
-function judge(platform, p, dePct, avgViews) {
+// 仅 caption 判定（STAGE 2 之后；返回 ⚠️ 的会进 STAGE 3）
+function judgeFromCaption(platform, p, dePct, avgViews) {
   const sc = shortCircuit(platform, p);
   if (sc.fail) return { verdict: '❌ 否', reason: sc.reason, regionAccurate: p.region ? '是' : '-' };
   const isReplaceByFans = p.fans < FAN_REPLACE;
@@ -173,7 +191,7 @@ function judge(platform, p, dePct, avgViews) {
   }
   if (langStatus === 'need-comments') {
     const extra = isReplaceByFans ? `；粉丝 ${p.fans}<10K（如评论通过则置换组）` : '';
-    return { verdict: '⚠️ 需人工核查', reason: `caption ${dePct}%<${CAPTION_THRESHOLD}% 但 bio 在 ${p.region.region} → 需调评论 API${extra}`, regionAccurate };
+    return { verdict: '⚠️ 需人工核查', reason: `caption ${dePct}%<${CAPTION_THRESHOLD}% 但 bio 在 ${p.region.region} → 待 STAGE 3 调评论 API${extra}`, regionAccurate, _pendingComments: true };
   }
   let viewStatus;
   if (avgViews >= VIEW_OK) viewStatus = 'pass';
@@ -187,6 +205,29 @@ function judge(platform, p, dePct, avgViews) {
     return { verdict: '🟡 置换组', reason: rs.join('; '), regionAccurate };
   }
   return { verdict: '✅ 是', reason: '-', regionAccurate };
+}
+
+// STAGE 3 后的最终判定：根据评论 dePct + 已有 avgViews 拍板
+function finalizeWithComments(p, avgViews, dePctComments) {
+  if (dePctComments === null) {
+    return { verdict: '⚠️ 需人工核查', reason: '评论数据不足（de+en 评论太少无法判定）', regionAccurate: '是' };
+  }
+  if (dePctComments < COMMENT_THRESHOLD) {
+    return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}%<${COMMENT_THRESHOLD}%`, regionAccurate: '是' };
+  }
+  const isReplaceByFans = p.fans < FAN_REPLACE;
+  let viewStatus;
+  if (avgViews >= VIEW_OK) viewStatus = 'pass';
+  else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
+  else viewStatus = 'fail';
+  if (viewStatus === 'fail') return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}% 通过 但近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}`, regionAccurate: '是' };
+  if (isReplaceByFans || viewStatus === 'replace') {
+    const rs = [];
+    if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`);
+    if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
+    return { verdict: '🟡 置换组', reason: `② 评论 ${dePctComments}% 通过；${rs.join('; ')}`, regionAccurate: '是' };
+  }
+  return { verdict: '✅ 是', reason: `② 评论 ${dePctComments}% 通过`, regionAccurate: '是' };
 }
 
 // === 主流程 ===
@@ -229,33 +270,23 @@ async function main() {
   const uniqueIG = [...new Set(inputOrder.filter(x => x.platform === 'IG').map(x => x.username))];
   console.log(`🔢 去重 TT=${uniqueTT.length}, IG=${uniqueIG.length}`);
 
-  // === STAGE 1: profile metadata ===
+  // === STAGE 1 ===
   console.log('\n=== STAGE 1: profile metadata（短路用）===');
   const stage1 = [];
   if (uniqueTT.length > 0) {
     console.log(`  → TT clockworks profile-only (resultsPerPage=1) ×${uniqueTT.length}`);
     stage1.push(startActor('clockworks/tiktok-profile-scraper', {
-      profiles: uniqueTT,
-      profileScrapeSections: ['videos'],
-      profileSorting: 'latest',
-      resultsPerPage: 1,
-      shouldDownloadAvatars: false, shouldDownloadCovers: false,
-      shouldDownloadSlideshowImages: false, shouldDownloadVideos: false,
-    }).then(async ({ runId, datasetId }) => {
-      await waitForRun(runId);
-      return { kind: 'tt-profile', items: await fetchDataset(datasetId) };
-    }));
+      profiles: uniqueTT, profileScrapeSections: ['videos'], profileSorting: 'latest', resultsPerPage: 1,
+      shouldDownloadAvatars: false, shouldDownloadCovers: false, shouldDownloadSlideshowImages: false, shouldDownloadVideos: false,
+    }).then(async ({ runId, datasetId }) => ({ kind: 'tt-profile', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
   }
   if (uniqueIG.length > 0) {
     console.log(`  → IG profile-scraper ×${uniqueIG.length}`);
-    stage1.push(startActor('apify/instagram-profile-scraper', { usernames: uniqueIG }).then(async ({ runId, datasetId }) => {
-      await waitForRun(runId);
-      return { kind: 'ig-profile', items: await fetchDataset(datasetId) };
-    }));
+    stage1.push(startActor('apify/instagram-profile-scraper', { usernames: uniqueIG })
+      .then(async ({ runId, datasetId }) => ({ kind: 'ig-profile', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
   }
   const stage1Results = await Promise.all(stage1);
 
-  // 解析 profile
   const ttProfiles = {}, igProfiles = {};
   for (const { kind, items } of stage1Results) {
     if (kind === 'tt-profile') {
@@ -265,33 +296,27 @@ async function main() {
         const bio = v['authorMeta.signature'] || v.authorMeta?.signature || '';
         const category = v['authorMeta.commerceUserInfo.category'] || v.authorMeta?.commerceUserInfo?.category || null;
         ttProfiles[name] = {
-          name,
-          fans: v['authorMeta.fans'] || v.authorMeta?.fans || 0,
+          name, fans: v['authorMeta.fans'] || v.authorMeta?.fans || 0,
           posts: v['authorMeta.video'] || v.authorMeta?.video || 0,
           bio, category,
           private: v['authorMeta.privateAccount'] || v.authorMeta?.privateAccount || false,
-          region: detectRegion(bio),
-          occupation: detectOccupation(bio, category),
+          region: detectRegion(bio), occupation: detectOccupation(bio, category),
         };
       }
     } else {
       for (const p of items) {
         igProfiles[p.username] = {
-          name: p.username,
-          fans: p.followersCount || 0,
-          posts: p.postsCount || 0,
-          bio: p.biography || '',
-          category: p.businessCategoryName || null,
-          private: p.private || false,
-          region: detectRegion(p.biography || ''),
-          occupation: detectOccupation(p.biography || '', p.businessCategoryName),
+          name: p.username, fans: p.followersCount || 0, posts: p.postsCount || 0,
+          bio: p.biography || '', category: p.businessCategoryName || null, private: p.private || false,
+          region: detectRegion(p.biography || ''), occupation: detectOccupation(p.biography || '', p.businessCategoryName),
         };
       }
     }
   }
 
   // === 短路过滤 ===
-  const results = {};
+  const results = {};        // 'TT:user'/'IG:user' → 最终判定
+  const survivorMeta = {};   // 'TT:user'/'IG:user' → { avgViews, urls } 给 STAGE 3 用
   const ttSurvivors = [], igSurvivors = [];
   for (const u of uniqueTT) {
     const p = ttProfiles[u];
@@ -311,36 +336,24 @@ async function main() {
   console.log(`   TT 存活: [${ttSurvivors.join(', ') || '无'}]`);
   console.log(`   IG 存活: [${igSurvivors.join(', ') || '无'}]`);
 
-  // === STAGE 2: 仅 survivors 抓 posts ===
+  // === STAGE 2 ===
+  const stage2DatasetMap = {};
   if (ttSurvivors.length + igSurvivors.length > 0) {
     console.log(`\n=== STAGE 2: 抓 survivors 的 posts/videos（${POSTS_LIMIT} 条/人）===`);
     const stage2 = [];
     if (ttSurvivors.length > 0) {
       console.log(`  → TT clockworks ${POSTS_LIMIT} videos ×${ttSurvivors.length}`);
       stage2.push(startActor('clockworks/tiktok-profile-scraper', {
-        profiles: ttSurvivors,
-        profileScrapeSections: ['videos'],
-        profileSorting: 'latest',
-        resultsPerPage: POSTS_LIMIT,
+        profiles: ttSurvivors, profileScrapeSections: ['videos'], profileSorting: 'latest', resultsPerPage: POSTS_LIMIT,
         excludePinnedPosts: true,
-        shouldDownloadAvatars: false, shouldDownloadCovers: false,
-        shouldDownloadSlideshowImages: false, shouldDownloadVideos: false,
-      }).then(async ({ runId, datasetId }) => {
-        await waitForRun(runId);
-        return { kind: 'tt-posts', items: await fetchDataset(datasetId) };
-      }));
+        shouldDownloadAvatars: false, shouldDownloadCovers: false, shouldDownloadSlideshowImages: false, shouldDownloadVideos: false,
+      }).then(async ({ runId, datasetId }) => ({ kind: 'tt-posts', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
     }
     if (igSurvivors.length > 0) {
       console.log(`  → IG post-scraper detailedData, ${POSTS_LIMIT} posts ×${igSurvivors.length}`);
       stage2.push(startActor('apify/instagram-post-scraper', {
-        username: igSurvivors,
-        dataDetailLevel: 'detailedData',
-        resultsLimit: POSTS_LIMIT,
-        skipPinnedPosts: false,
-      }).then(async ({ runId, datasetId }) => {
-        await waitForRun(runId);
-        return { kind: 'ig-posts', items: await fetchDataset(datasetId) };
-      }));
+        username: igSurvivors, dataDetailLevel: 'detailedData', resultsLimit: POSTS_LIMIT, skipPinnedPosts: false,
+      }).then(async ({ runId, datasetId }) => ({ kind: 'ig-posts', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
     }
     const stage2Results = await Promise.all(stage2);
 
@@ -351,9 +364,7 @@ async function main() {
           const name = v['authorMeta.name'] || v.authorMeta?.name;
           if (!name) continue;
           (ttPostsByUser[name] = ttPostsByUser[name] || []).push({
-            lang: v.textLanguage,
-            createTime: v.createTimeISO,
-            playCount: v.playCount || 0,
+            lang: v.textLanguage, createTime: v.createTimeISO, playCount: v.playCount || 0, url: v.webVideoUrl,
           });
         }
       } else {
@@ -373,8 +384,9 @@ async function main() {
       const dePct = (de + en) > 0 ? Math.round(de * 100 / (de + en)) : null;
       const recent = posts.filter(x => new Date(x.createTime) > threeMonthsAgo);
       const avgViews = recent.length > 0 ? Math.round(recent.reduce((s, x) => s + x.playCount, 0) / recent.length) : 0;
-      const j = judge('TT', p, dePct, avgViews);
+      const j = judgeFromCaption('TT', p, dePct, avgViews);
       results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, ...j, avgViews };
+      survivorMeta[`TT:${u}`] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
     for (const u of igSurvivors) {
       const p = igProfiles[u];
@@ -395,16 +407,94 @@ async function main() {
         const views = recentVideos.map(x => x.videoPlayCount || x.videoViewCount || 0);
         avgViews = Math.round(views.reduce((s, v) => s + v, 0) / views.length);
       }
-      const j = judge('IG', p, dePct, avgViews);
+      const j = judgeFromCaption('IG', p, dePct, avgViews);
       results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, ...j, avgViews };
+      survivorMeta[`IG:${u}`] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
 
-    // 持久化 raw 数据
     const map = { 'tt-profile': 'tt_profiles_stage1.json', 'tt-posts': 'tt_profiles.json', 'ig-profile': 'ig_profiles.json', 'ig-posts': 'ig_posts.json' };
     for (const { kind, items } of [...stage1Results, ...stage2Results]) {
       fs.writeFileSync(path.join(DATA_DIR, map[kind]), JSON.stringify(items));
+      stage2DatasetMap[kind] = items;
     }
   }
+
+  // === STAGE 3: ⚠️ 评论检查 ===
+  const warnList = Object.entries(results).filter(([, r]) => r._pendingComments).map(([k]) => k);
+  if (warnList.length > 0) {
+    console.log(`\n=== STAGE 3: ⚠️ 评论检查（${warnList.length} 人）===`);
+    const ttWarn = warnList.filter(k => k.startsWith('TT:')).map(k => k.slice(3));
+    const igWarn = warnList.filter(k => k.startsWith('IG:')).map(k => k.slice(3));
+    const stage3 = [];
+    if (ttWarn.length > 0) {
+      const urls = ttWarn.flatMap(u => (survivorMeta[`TT:${u}`]?.urls || []).slice(0, POSTS_LIMIT));
+      console.log(`  → TT thescrapelab ${urls.length} videos × ${COMMENTS_PER_POST} 评论 (${ttWarn.length} 人)`);
+      stage3.push(startActor('thescrapelab/tiktok-comments-scraper', {
+        videoUrls: urls, maxCommentsPerVideo: COMMENTS_PER_POST, includeReplies: false,
+      }).then(async ({ runId, datasetId }) => ({ kind: 'tt-comments', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
+    }
+    if (igWarn.length > 0) {
+      const urls = igWarn.flatMap(u => (survivorMeta[`IG:${u}`]?.urls || []).slice(0, POSTS_LIMIT));
+      console.log(`  → IG instagram-comment-scraper ${urls.length} posts × ${COMMENTS_PER_POST} 评论 (${igWarn.length} 人)`);
+      stage3.push(startActor('apify/instagram-comment-scraper', {
+        directUrls: urls, resultsLimit: COMMENTS_PER_POST,
+      }).then(async ({ runId, datasetId }) => ({ kind: 'ig-comments', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
+    }
+    const stage3Results = await Promise.all(stage3);
+
+    // 分析评论
+    const ttCommentsByUser = {}, igCommentsByUser = {};
+    for (const { kind, items } of stage3Results) {
+      fs.writeFileSync(path.join(DATA_DIR, kind === 'tt-comments' ? 'tt_comments.json' : 'ig_comments.json'), JSON.stringify(items));
+      if (kind === 'tt-comments') {
+        // 用 thescrapelab 自带 language 字段（如果有）；没有的回退到 detectCommentLang
+        for (const c of items) {
+          if (!c.video_url || !c.text) continue;
+          const m = c.video_url.match(/@([^/]+)\//);
+          if (!m) continue;
+          const user = m[1];
+          if (!ttWarn.includes(user)) continue;
+          const s = ttCommentsByUser[user] = ttCommentsByUser[user] || { de: 0, en: 0, total: 0 };
+          s.total++;
+          const lang = c.language || detectCommentLang(c.text);
+          if (lang === 'de') s.de++;
+          else if (lang === 'en') s.en++;
+        }
+      } else {
+        // 用 ig_posts.json url→ownerUsername 映射
+        const urlToOwner = {};
+        const igPosts = stage2DatasetMap['ig-posts'] || [];
+        for (const p of igPosts) if (p.url) urlToOwner[p.url] = p.ownerUsername;
+        for (const c of items) {
+          if (!c.postUrl || !c.text) continue;
+          const user = urlToOwner[c.postUrl];
+          if (!user || !igWarn.includes(user)) continue;
+          const s = igCommentsByUser[user] = igCommentsByUser[user] || { de: 0, en: 0, total: 0 };
+          s.total++;
+          const lang = detectCommentLang(c.text);
+          if (lang === 'de') s.de++;
+          else if (lang === 'en') s.en++;
+        }
+      }
+    }
+
+    // 用评论结果二次判定
+    for (const k of warnList) {
+      const platform = k.slice(0, 2);
+      const user = k.slice(3);
+      const p = platform === 'TT' ? ttProfiles[user] : igProfiles[user];
+      const stats = platform === 'TT' ? ttCommentsByUser[user] : igCommentsByUser[user];
+      const meta = survivorMeta[k];
+      const dePct = stats && (stats.de + stats.en) > 0 ? Math.round(stats.de * 100 / (stats.de + stats.en)) : null;
+      const j = finalizeWithComments(p, meta.avgViews, dePct);
+      results[k] = { platform, name: user, fans: p.fans, posts: p.posts, ...j, avgViews: meta.avgViews };
+      const statSummary = stats ? `(de=${stats.de}, en=${stats.en}, total=${stats.total})` : '(无评论数据)';
+      console.log(`   ${k}: 评论 ${dePct ?? '?'}% ${statSummary} → ${j.verdict}`);
+    }
+  }
+
+  // 清掉 _pendingComments 标记（如果还有）
+  for (const k of Object.keys(results)) delete results[k]._pendingComments;
 
   // === 输出表 ===
   console.log('\n=== 最终判定（按粘贴顺序）===\n');
@@ -438,6 +528,7 @@ async function main() {
     '',
     `> 规则: v0.4 微调 (caption ${CAPTION_THRESHOLD}% / 评论 ${COMMENT_THRESHOLD}%)`,
     `> 抓取量: ${POSTS_LIMIT} posts/videos per survivor (短路淘汰 ${uniqueTT.length - ttSurvivors.length + uniqueIG.length - igSurvivors.length}/${uniqueTT.length + uniqueIG.length})`,
+    warnList.length > 0 ? `> STAGE 3 评论检查: ${warnList.length} 人` : `> STAGE 3 评论检查: 无 ⚠️，跳过`,
     `> Apify 成本: $${totalUsd.toFixed(4)} (~¥${(totalUsd * USD_TO_CNY).toFixed(2)})`,
     '',
     '## 最终判定表',
