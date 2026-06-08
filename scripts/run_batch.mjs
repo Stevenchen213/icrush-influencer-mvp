@@ -320,16 +320,16 @@ async function main() {
   const ttSurvivors = [], igSurvivors = [];
   for (const u of uniqueTT) {
     const p = ttProfiles[u];
-    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: 0, posts: 0, regionAccurate: '-', avgViews: 0, verdict: '⚠️ 抓取失败', reason: 'TT profile 抓取无返回' }; continue; }
+    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, verdict: '⚠️ 抓取失败', reason: 'TT profile 抓取无返回' }; continue; }
     const sc = shortCircuit('TT', p);
-    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: 0, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, verdict: '❌ 否', reason: sc.reason };
     else ttSurvivors.push(u);
   }
   for (const u of uniqueIG) {
     const p = igProfiles[u];
-    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: 0, posts: 0, regionAccurate: '-', avgViews: 0, verdict: '⚠️ 抓取失败', reason: 'IG profile 抓取无返回' }; continue; }
+    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, verdict: '⚠️ 抓取失败', reason: 'IG profile 抓取无返回' }; continue; }
     const sc = shortCircuit('IG', p);
-    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: 0, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, verdict: '❌ 否', reason: sc.reason };
     else igSurvivors.push(u);
   }
   console.log(`\n⚡ 短路淘汰: TT ${uniqueTT.length - ttSurvivors.length}/${uniqueTT.length}, IG ${uniqueIG.length - igSurvivors.length}/${uniqueIG.length}`);
@@ -503,7 +503,10 @@ async function main() {
   const rows = inputOrder.map((u, i) => {
     const r = results[`${u.platform}:${u.username}`];
     if (!r) return `| ${i + 1} | ${u.platform} | ${u.username} | - | - | - | - | ⚠️ 抓取失败 | - |`;
-    return `| ${i + 1} | ${r.platform} | ${r.name} | ${(r.fans || 0).toLocaleString()} | ${r.posts || '?'} | ${r.regionAccurate} | ${(r.avgViews || 0).toLocaleString()} | ${r.verdict} | ${r.reason} |`;
+    const fansStr = r.fans == null ? '-' : r.fans.toLocaleString();
+    const postsStr = r.posts == null ? '-' : r.posts;
+    const viewsStr = r.avgViews == null ? '-' : r.avgViews.toLocaleString();
+    return `| ${i + 1} | ${r.platform} | ${r.name} | ${fansStr} | ${postsStr} | ${r.regionAccurate} | ${viewsStr} | ${r.verdict} | ${r.reason} |`;
   });
   const stats = {};
   for (const k of Object.keys(results)) stats[results[k].verdict] = (stats[results[k].verdict] || 0) + 1;
