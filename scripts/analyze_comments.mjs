@@ -100,7 +100,7 @@ if (ttData) {
   for (const [user, s] of Object.entries(ttCommentsByUser)) {
     const denom = s.de + s.en;
     const dePct = denom > 0 ? Math.round(s.de * 100 / denom) : null;
-    const pass = dePct !== null && dePct >= 70 ? '✅' : (dePct === null ? '⚠️ 无定论' : '❌');
+    const pass = dePct !== null && dePct >= 60 ? '✅' : (dePct === null ? '⚠️ 无定论' : '❌');
     console.log(`${user}: total=${s.total}, de=${s.de}, en=${s.en}, un=${s.un}, other=${s.other} → 德语%=${dePct}% ${pass}`);
   }
 }
@@ -132,7 +132,7 @@ if (igComments && igPosts) {
   for (const [user, s] of Object.entries(igCommentsByUser)) {
     const denom = s.de + s.en;
     const dePct = denom > 0 ? Math.round(s.de * 100 / denom) : null;
-    const pass = dePct !== null && dePct >= 70 ? '✅' : (dePct === null ? '⚠️ 无定论' : '❌');
+    const pass = dePct !== null && dePct >= 60 ? '✅' : (dePct === null ? '⚠️ 无定论' : '❌');
     console.log(`${user}: total=${s.total}, de=${s.de}, en=${s.en}, un=${s.un} → 德语%=${dePct}% ${pass}`);
   }
 }

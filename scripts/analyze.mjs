@@ -248,24 +248,24 @@ function judge(r) {
   if (r.region) {
     if (r.region.region === 'DE' || r.region.region === 'AT') {
       regionAccurate = '是';
-      const langPass = r.dePct !== null && r.dePct >= 70;
+      const langPass = r.dePct !== null && r.dePct >= 50;
       langStatus = langPass ? 'pass' : 'need-comments';
     } else {
       return { verdict: '❌ 否', reason: `bio地区${r.region.region}非DE/AT`, regionAccurate: '否' };
     }
   } else {
     regionAccurate = '-';
-    const langPass = r.dePct !== null && r.dePct >= 70;
+    const langPass = r.dePct !== null && r.dePct >= 50;
     if (langPass) {
       langStatus = 'pass';
     } else {
-      return { verdict: '❌ 否', reason: `bio无地区+语言${r.dePct ?? '?'}%<70%`, regionAccurate: '-' };
+      return { verdict: '❌ 否', reason: `bio无地区+语言${r.dePct ?? '?'}%<50%`, regionAccurate: '-' };
     }
   }
 
   if (langStatus === 'need-comments') {
     const extra = isReplaceByFans ? `；粉丝${r.fans}<10K（如评论通过则置换组）` : '';
-    return { verdict: '⚠️ 需人工核查', reason: `语言${r.dePct ?? '?'}%<70% 但bio在${r.region.region} → 需调评论API${extra}`, regionAccurate };
+    return { verdict: '⚠️ 需人工核查', reason: `语言${r.dePct ?? '?'}%<50% 但bio在${r.region.region} → 需调评论API${extra}`, regionAccurate };
   }
 
   // Step 6: 平均浏览
