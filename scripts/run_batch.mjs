@@ -165,7 +165,19 @@ function detectOccupation(bio, category) {
 function shortCircuit(platform, p) {
   if (p.occupation) return { fail: true, reason: `职业=${p.occupation === 'Lawyer' ? '律师' : '艺术家'}（直接 PASS）` };
   if (p.private) return { fail: true, reason: '私密账户' };
-  if (p.posts < POSTS_MIN) return { fail: true, reason: `帖数 ${p.posts}<${POSTS_MIN}` };
+  if (p.posts < POSTS_MIN) {
+    // IG: postsCount 不含"不同步到主页网格"的 reels，150-199 区间用 latestPosts 探测 reel-heavy 避免误杀
+    if (platform === 'IG' && p.posts >= 150 && p.latestPosts && p.latestPosts.length > 0) {
+      const reelsCount = p.latestPosts.filter(x => x.type === 'Video').length;
+      const reelsRatio = reelsCount / p.latestPosts.length;
+      if (reelsRatio < 0.5) {
+        return { fail: true, reason: `帖数 ${p.posts}<${POSTS_MIN}` };
+      }
+      // reel-heavy: 大量内容没计入 postsCount，放行进 STAGE 2
+    } else {
+      return { fail: true, reason: `帖数 ${p.posts}<${POSTS_MIN}` };
+    }
+  }
   if (p.fans < FAN_MIN) return { fail: true, reason: `粉丝 ${p.fans}<1K` };
   if (p.fans > FAN_MAX[platform]) return { fail: true, reason: `粉丝 ${p.fans.toLocaleString()}>${FAN_MAX[platform].toLocaleString()}` };
   if (p.region && p.region.region !== 'DE' && p.region.region !== 'AT') {
@@ -309,6 +321,7 @@ async function main() {
           name: p.username, fans: p.followersCount || 0, posts: p.postsCount || 0,
           bio: p.biography || '', category: p.businessCategoryName || null, private: p.private || false,
           region: detectRegion(p.biography || ''), occupation: detectOccupation(p.biography || '', p.businessCategoryName),
+          latestPosts: p.latestPosts || [],
         };
       }
     }
