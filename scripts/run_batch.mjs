@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 完整批量判定流水线（v0.4 微调阈值 50%/60%）
+ * 完整批量判定流水线（v0.4 微调阈值 25%/60%）
  *
  * 流程：
- *   STAGE 1: profile metadata（IG profile-scraper + TT clockworks resultsPerPage=1）
- *   ↓ 短路淘汰：帖数<200/职业=艺术家律师/私密/粉丝越界/bio地区非DE-AT 直接 ❌
+ *   STAGE 1: profile metadata（IG profile-scraper + about.country; TT clockworks resultsPerPage=1）
+ *   ↓ 短路淘汰：帖数<150 直接 ❌ / 150-199 reel-heavy 豁免 / 职业=艺术家律师 / 私密 / 粉丝越界 / 地区非 DE-AT
  *   STAGE 2: survivors 抓 20 posts（IG detailedData 含 view count，TT clockworks）
- *   ↓ 按 caption 判定（① ≥50%）；⚠️ = bio 在 DE/AT 但 caption <50%
+ *   ↓ 按 caption 判定（① ≥25%）；⚠️ = bio/账号 在 DE/AT 但 caption <25%
  *   STAGE 3（仅当有 ⚠️ 时）：⚠️ 用户调评论 API（每视频/帖 10 条，表情不计入）
  *   ↓ 评论 ≥60% → ✅/🟡（看 avgViews+fans）；<60% → ❌；不足 → 还是 ⚠️
  *   输出按用户粘贴顺序，存 results/<date>_batch<N>_<seq>.md，末尾打印真实 Apify 成本
@@ -23,7 +23,7 @@ import path from 'path';
 const TOKEN = process.env.APIFY_TOKEN;
 if (!TOKEN) throw new Error('APIFY_TOKEN 未设置（用 --env-file=.env）');
 
-const CAPTION_THRESHOLD = 50;
+const CAPTION_THRESHOLD = 25;
 const COMMENT_THRESHOLD = 60;
 const POSTS_LIMIT = 20;
 const COMMENTS_PER_POST = 10;
@@ -294,7 +294,7 @@ async function main() {
   }
   if (uniqueIG.length > 0) {
     console.log(`  → IG profile-scraper ×${uniqueIG.length}`);
-    stage1.push(startActor('apify/instagram-profile-scraper', { usernames: uniqueIG })
+    stage1.push(startActor('apify/instagram-profile-scraper', { usernames: uniqueIG, includeAboutSection: true })
       .then(async ({ runId, datasetId }) => ({ kind: 'ig-profile', items: (await waitForRun(runId), await fetchDataset(datasetId)) })));
   }
   const stage1Results = await Promise.all(stage1);
@@ -317,10 +317,16 @@ async function main() {
       }
     } else {
       for (const p of items) {
+        // 优先读 about.country（IG 账号设置里的地区），次选 bio 城市匹配
+        let region = null;
+        const aboutCountry = (p.about && p.about.country) || '';
+        if (aboutCountry === 'Germany') region = { region: 'DE', city: 'about.country' };
+        else if (aboutCountry === 'Austria') region = { region: 'AT', city: 'about.country' };
+        else region = detectRegion(p.biography || '');
         igProfiles[p.username] = {
           name: p.username, fans: p.followersCount || 0, posts: p.postsCount || 0,
           bio: p.biography || '', category: p.businessCategoryName || null, private: p.private || false,
-          region: detectRegion(p.biography || ''), occupation: detectOccupation(p.biography || '', p.businessCategoryName),
+          region, occupation: detectOccupation(p.biography || '', p.businessCategoryName),
           latestPosts: p.latestPosts || [],
         };
       }
