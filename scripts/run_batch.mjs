@@ -55,12 +55,26 @@ function parseURL(url) {
   return null;
 }
 
-// === Apify API ===
+// === Apify API（带重试，国内网络抗波动）===
 const apifyRuns = [];
+
+async function apiFetch(url, opts = {}, retries = 3) {
+  let lastErr;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const r = await fetch(url, opts);
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (i < retries - 1) { console.log(`  ⚡ fetch 重试 ${i + 1}/${retries}: ${e.message}`); await new Promise(r => setTimeout(r, 3000 * (i + 1))); }
+    }
+  }
+  throw lastErr;
+}
 
 async function startActor(actor, input) {
   const url = `https://api.apify.com/v2/acts/${actor.replace('/', '~')}/runs?token=${TOKEN}`;
-  const r = await fetch(url, {
+  const r = await apiFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -74,7 +88,7 @@ async function startActor(actor, input) {
 async function waitForRun(runId, maxWaitSec = 900) {
   const start = Date.now();
   while (Date.now() - start < maxWaitSec * 1000) {
-    const r = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${TOKEN}`);
+    const r = await apiFetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${TOKEN}`);
     const data = (await r.json()).data;
     if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(data.status)) {
       if (data.status !== 'SUCCEEDED') throw new Error(`Run ${runId} ended with status ${data.status}`);
@@ -87,7 +101,7 @@ async function waitForRun(runId, maxWaitSec = 900) {
 
 async function fetchDataset(datasetId) {
   const url = `https://api.apify.com/v2/datasets/${datasetId}/items?token=${TOKEN}&clean=true&limit=10000`;
-  const r = await fetch(url);
+  const r = await apiFetch(url);
   if (!r.ok) throw new Error(`fetchDataset(${datasetId}): HTTP ${r.status}`);
   return await r.json();
 }
@@ -256,7 +270,7 @@ async function reportCost() {
   const lines = [];
   for (const { id, actor } of apifyRuns) {
     try {
-      const r = await fetch(`https://api.apify.com/v2/actor-runs/${id}?token=${TOKEN}`);
+      const r = await apiFetch(`https://api.apify.com/v2/actor-runs/${id}?token=${TOKEN}`);
       const data = (await r.json()).data;
       const usd = data.usageTotalUsd || 0;
       total += usd;
