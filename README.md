@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagram / TikTok 主页链接，按硬性条件自动判定"合适 / 不合适 / 置换组 / 需人工核查"，省去手动对照查重表 + 人工核对每个账号的时间。
 
-**当前版本**：v0.4 (2026-06-08)
+**当前版本**：v0.5 (2026-06-10)
 
 ## 🎯 干啥的
 
@@ -10,12 +10,12 @@ ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagr
 
 | 硬性条件 | 阈值 |
 |---------|------|
-| 1. 地区 | DE 或 AT（bio 城市 / about.country + caption 25% 德语 + 评论 60% 德语，每视频 10 条文字评论）|
+| 1. 地区 | DE 或 AT（优先 Wednesday 受众国家+城市，fallback caption 25% 德语 + 评论 60% 德语）|
 | 2. 粉丝数 | TT 10K-500K / IG 10K-300K（<10K 置换组，<1K 直接 pass）|
 | 3. 帖数 | TT/IG ≥ 200（私密账户直接 pass）|
 | 4. 近 3 月平均浏览 | ≥4000 / 2000-3999 置换组 / <2000 pass |
 | 5. 职业 | 律师 / 艺术家 → 直接 pass |
-| 6. 男粉占比（二期）| ≤ 40%（粉丝 >100K 时可放宽到 65%）|
+| 6. 女粉占比 | 男粉 >50% 否决（粉丝 >100K 时放宽到 65%）|
 
 详细规则见 [docs/rules_v0.4.md](docs/rules_v0.4.md)。
 
@@ -24,18 +24,15 @@ ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagr
 ```
 icrush-influencer-mvp/
 ├── scripts/                       # 处理脚本
-│   ├── fetch_comments.mjs         # 直连 Apify API 抓评论数据
-│   ├── analyze.mjs                # 主分析：6 条硬性条件判定
-│   ├── analyze_comments.mjs       # 评论语言占比分析
-│   ├── extract_urls.mjs           # 从 profile dataset 提取视频/帖子 URL
-│   └── final_table.mjs            # 输出最终判定表
+│   ├── run_batch.mjs              # 主流水线：一键跑完整批（v0.5 Wednesday 集成）
+│   ├── analyze_mvp_v4.mjs         # 旧版分析脚本
+│   └── ...
 ├── docs/
-│   ├── rules_v0.4.md              # 完整规则文档
+│   ├── rules_v0.4.md              # 完整规则文档（已更新至 v0.5）
 │   └── workflow.md                # 流水线说明
 ├── results/                       # 历次跑的结果
-│   └── 2026-06-08_batch23.md      # 最近一次 23 人测试
 ├── data/                          # 抓回来的原始数据（gitignored）
-├── .env.example                   # 环境变量模板（复制成 .env 填 token）
+├── .env.example                   # 环境变量模板（APIFY_TOKEN + WEDNESDAY_TOKEN）
 ├── .gitignore
 ├── package.json
 └── README.md
@@ -44,6 +41,7 @@ icrush-influencer-mvp/
 ## 🛠️ 工具栈
 
 - **Apify**：主数据源，靠 Actor 抓 TT/IG 公开数据
+- **Wednesday/Upfluence**：免费受众数据（性别、国家、城市），优先判定地区+男女粉比，节省 Apify 语言检测成本
   - TT 主页：[`clockworks/tiktok-profile-scraper`](https://apify.com/clockworks/tiktok-profile-scraper)
   - TT 评论：[`thescrapelab/tiktok-comments-scraper`](https://apify.com/thescrapelab/tiktok-comments-scraper)
   - IG 主页：[`apify/instagram-profile-scraper`](https://apify.com/apify/instagram-profile-scraper)
@@ -80,12 +78,13 @@ npm run run-batch data/input.txt
 
 1. **解析 URL**（支持 IG `/<user>/` 和 TT `/@<user>` 两种格式，去重 + 保留输入顺序）
 2. **STAGE 1**：抓 profile metadata（IG profile-scraper + TT clockworks `resultsPerPage=1`）
-3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 / bio 地区非 DE/AT → 直接 ❌，不进 STAGE 2
-4. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count，TT clockworks 20 视频）
-5. **caption 判定**（v0.4 微调规则 caption 50%）；bio 在 DE/AT 但 caption <50% 的标 ⚠️
-6. **STAGE 3**（仅当有 ⚠️ 时）：对 ⚠️ 用户调评论 API（TT `thescrapelab/tiktok-comments-scraper` + IG `apify/instagram-comment-scraper`），每帖 10 条评论，按 ≥60% 德语二次判定
-7. **输出表格**按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
-8. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
+3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 → 直接 ❌
+4. **STAGE 1.5**：Wednesday/Upfluence 查询（免费）— 受众国家+城市判定地区，性别判定男女粉比
+5. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count）；Wednesday 确认者跳过语言检测
+6. **caption 判定**（v0.5 规则 caption 25%）；仅 Wednesday 无数据者需检测语言
+7. **STAGE 3**（仅当有 ⚠️ 时）：调评论 API，每帖 10 条，按 ≥60% 德语二次判定
+8. **输出表格**含女粉占比列，按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
+9. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
 
 成本对比（14 unique 达人，9 个短路淘汰，0 个 ⚠️）：
 

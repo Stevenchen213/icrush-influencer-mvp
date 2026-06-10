@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 /**
- * 完整批量判定流水线（v0.4 微调阈值 25%/60%）
+ * 完整批量判定流水线（v0.5 Wednesday 集成）
  *
  * 流程：
- *   STAGE 1: profile metadata（IG profile-scraper + about.country; TT clockworks resultsPerPage=1）
- *   ↓ 短路淘汰：帖数<150 直接 ❌ / 150-199 reel-heavy 豁免 / 职业=艺术家律师 / 私密 / 粉丝越界 / 地区非 DE-AT
+ *   STAGE 1: profile metadata（IG profile-scraper; TT clockworks resultsPerPage=1）
+ *   ↓ 短路淘汰：帖数<150 ❌ / 150-199 reel-heavy 豁免 / 职业=艺术家律师 / 私密 / 粉丝越界
+ *   STAGE 1.5: Wednesday/Upfluence 查询（免费）
+ *   ├─ ✅ 有数据 → 受众国家#1=DE(>35%) + 城市#1=德城 → 地区确认
+ *   │            + 男粉占比 >50%(>100K 时 65%) → ❌
+ *   │            两项都通过 → 直接 ✅（跳过语言检测）
+ *   └─ ❌ 无数据 → 走原流程
  *   STAGE 2: survivors 抓 20 posts（IG detailedData 含 view count，TT clockworks）
- *   ↓ 按 caption 判定（① ≥25%）；⚠️ = bio/账号 在 DE/AT 但 caption <25%
+ *   ↓ Wednesday 确认者：仅算 avgViews + 性别判定
+ *   ↓ Wednesday 无数据者：caption 语言（① ≥25%）；⚠️ = region 在 DE/AT 但 caption <25%
  *   STAGE 3（仅当有 ⚠️ 时）：⚠️ 用户调评论 API（每视频/帖 10 条，表情不计入）
  *   ↓ 评论 ≥60% → ✅/🟡（看 avgViews+fans）；<60% → ❌；不足 → 还是 ⚠️
- *   输出按用户粘贴顺序，存 results/<date>_batch<N>_<seq>.md，末尾打印真实 Apify 成本
+ *   输出按用户粘贴顺序，含男粉占比列，存 results/<date>_batch<N>_<seq>.md，末尾打印成本
  *
  * 用法：
  *   node --env-file=.env scripts/run_batch.mjs data/input.txt
@@ -35,6 +41,11 @@ const VIEW_REPLACE = 2000;
 const VIEW_OK = 4000;
 const THREE_MONTH_MS = 90 * 24 * 60 * 60 * 1000;
 const USD_TO_CNY = 7.25;
+const WEDNESDAY_TOKEN = process.env.WEDNESDAY_TOKEN || '';
+const WEDNESDAY_BASE = 'https://facade.upfluence.co/api/v1';
+const GENDER_MALE_MAX = 50;
+const GENDER_MALE_MAX_100K = 65;
+const WEDNESDAY_COUNTRY_MIN = 35;
 
 const DATA_DIR = path.resolve('./data');
 const RESULTS_DIR = path.resolve('./results');
@@ -104,6 +115,68 @@ async function fetchDataset(datasetId) {
   const r = await apiFetch(url);
   if (!r.ok) throw new Error(`fetchDataset(${datasetId}): HTTP ${r.status}`);
   return await r.json();
+}
+
+// === Wednesday/Upfluence 数据 ===
+// 注：Upfluence API 仅限浏览器内调用（TLS 指纹保护），Node.js 直连会被拦。
+// 主脚本从 data/wednesday_cache.json 读缓存；缓存由 scripts/refresh_wednesday_cache.mjs（Playwright）更新。
+
+let _wednesdayCache = null;
+function loadWednesdayCache() {
+  if (_wednesdayCache) return _wednesdayCache;
+  try {
+    _wednesdayCache = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'wednesday_cache.json'), 'utf-8'));
+    return _wednesdayCache;
+  } catch { _wednesdayCache = {}; return _wednesdayCache; }
+}
+
+function wednesdayLookup(username) {
+  const cache = loadWednesdayCache();
+  const entry = cache[username];
+  if (!entry || !entry.found) return { found: false };
+  return {
+    found: true,
+    gender: entry.gender || null,
+    topCountry: entry.topCountry || null,
+    topCity: entry.topCity || null,
+  };
+}
+
+function isGermanCity(cityName) {
+  if (!cityName) return false;
+  const lower = cityName.toLowerCase();
+  for (const c of germanCityList) if (lower.includes(c)) return true;
+  for (const c of austrianCities) if (lower.includes(c)) return true;
+  // 检查德语城市缩写 + 常见德国城市格式 ", DE" / ", HH" 等
+  for (const c of germanCityAbbr) if (lower.startsWith(c.toLowerCase() + ',')) return true;
+  // 检查 ", DE" 结尾
+  if (/, de$/.test(lower) || /, at$/.test(lower)) return true;
+  return false;
+}
+
+function judgeWednesdayRegion(wd) {
+  // 国家#1 必须是 DE 且 >35%
+  if (!wd.topCountry || wd.topCountry.code !== 'DE') {
+    return { pass: false, reason: `受众国家#1=${wd.topCountry?.code || '?'} 非 DE` };
+  }
+  if (wd.topCountry.pct < WEDNESDAY_COUNTRY_MIN) {
+    return { pass: false, reason: `受众 DE 仅 ${wd.topCountry.pct}%<${WEDNESDAY_COUNTRY_MIN}%` };
+  }
+  // 城市#1 必须是德国城市
+  if (!wd.topCity || !isGermanCity(wd.topCity.name)) {
+    return { pass: false, reason: `受众城市#1=${wd.topCity?.name || '?'} 非德城` };
+  }
+  return { pass: true };
+}
+
+function judgeGender(wd, fans) {
+  if (!wd.gender) return { pass: true, malePct: null }; // 没性别数据不卡
+  const male = wd.gender.male;
+  const maxMale = fans > 100000 ? GENDER_MALE_MAX_100K : GENDER_MALE_MAX;
+  if (male > maxMale) {
+    return { pass: false, malePct: wd.gender.female, reason: `男粉 ${male}%>${maxMale}%` };
+  }
+  return { pass: true, malePct: wd.gender.female };
 }
 
 // === 语言检测（与 analyze.mjs 同步） ===
@@ -194,9 +267,6 @@ function shortCircuit(platform, p) {
   }
   if (p.fans < FAN_MIN) return { fail: true, reason: `粉丝 ${p.fans}<1K` };
   if (p.fans > FAN_MAX[platform]) return { fail: true, reason: `粉丝 ${p.fans.toLocaleString()}>${FAN_MAX[platform].toLocaleString()}` };
-  if (p.region && p.region.region !== 'DE' && p.region.region !== 'AT') {
-    return { fail: true, reason: `bio 地区 ${p.region.region} 非 DE/AT` };
-  }
   return { fail: false };
 }
 
@@ -253,7 +323,7 @@ function finalizeWithComments(p, avgViews, dePctComments) {
     if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
     return { verdict: '🟡 置换组', reason: `② 评论 ${dePctComments}% 通过；${rs.join('; ')}`, regionAccurate: '是' };
   }
-  return { verdict: '✅ 是', reason: `② 评论 ${dePctComments}% 通过`, regionAccurate: '是' };
+  return { verdict: '✅ 是', reason: '-', regionAccurate: '是' };
 }
 
 // === 主流程 ===
@@ -353,21 +423,72 @@ async function main() {
   const ttSurvivors = [], igSurvivors = [];
   for (const u of uniqueTT) {
     const p = ttProfiles[u];
-    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, verdict: '⚠️ 抓取失败', reason: 'TT profile 抓取无返回' }; continue; }
+    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', reason: 'TT profile 抓取无返回' }; continue; }
     const sc = shortCircuit('TT', p);
-    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, verdict: '❌ 否', reason: sc.reason };
     else ttSurvivors.push(u);
   }
   for (const u of uniqueIG) {
     const p = igProfiles[u];
-    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, verdict: '⚠️ 抓取失败', reason: 'IG profile 抓取无返回' }; continue; }
+    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', reason: 'IG profile 抓取无返回' }; continue; }
     const sc = shortCircuit('IG', p);
-    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, verdict: '❌ 否', reason: sc.reason };
     else igSurvivors.push(u);
   }
   console.log(`\n⚡ 短路淘汰: TT ${uniqueTT.length - ttSurvivors.length}/${uniqueTT.length}, IG ${uniqueIG.length - igSurvivors.length}/${uniqueIG.length}`);
   console.log(`   TT 存活: [${ttSurvivors.join(', ') || '无'}]`);
   console.log(`   IG 存活: [${igSurvivors.join(', ') || '无'}]`);
+
+  // === STAGE 1.5: Wednesday 缓存查询（免费）===
+  const wednesdayData = {};   // 'IG:user'/'TT:user' → { found, regionPass, genderPass, genderFemale, ... }
+  const wdSurvivors = [...ttSurvivors, ...igSurvivors];
+  if (wdSurvivors.length > 0) {
+    console.log(`\n=== STAGE 1.5: Wednesday 地区+性别查询（${wdSurvivors.length} 人）===`);
+    const cache = loadWednesdayCache();
+    for (const u of wdSurvivors) {
+      const platform = ttSurvivors.includes(u) ? 'TT' : 'IG';
+      const p = platform === 'TT' ? ttProfiles[u] : igProfiles[u];
+      const key = `${platform}:${u}`;
+      const detail = wednesdayLookup(u);
+      if (!detail.found) {
+        console.log(`  → ${key}: ❌ 无缓存 → 走原流程`);
+        wednesdayData[key] = { found: false };
+        continue;
+      }
+      // 地区判定
+      const regionR = judgeWednesdayRegion(detail);
+      // 性别判定
+      const genderR = judgeGender(detail, p.fans);
+      const femaleStr = detail.gender ? `${detail.gender.female}%` : '无信息';
+      wednesdayData[key] = {
+        found: true,
+        regionPass: regionR.pass,
+        genderPass: genderR.pass,
+        genderFemale: detail.gender?.female ?? null,
+        topCountry: detail.topCountry,
+        topCity: detail.topCity,
+      };
+      if (!regionR.pass) {
+        // 地区不通过 → ❌
+        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '否 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, verdict: '❌ 否', reason: regionR.reason };
+        console.log(`     ❌ 地区不通过: ${regionR.reason}`);
+        // 从 survivor 列表中移除
+        if (platform === 'TT') ttSurvivors.splice(ttSurvivors.indexOf(u), 1);
+        else igSurvivors.splice(igSurvivors.indexOf(u), 1);
+      } else if (!genderR.pass) {
+        // 性别不通过 → ❌
+        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '是 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, verdict: '❌ 否', reason: genderR.reason };
+        console.log(`     ❌ 性别不通过: ${genderR.reason} (女粉 ${femaleStr})`);
+        if (platform === 'TT') ttSurvivors.splice(ttSurvivors.indexOf(u), 1);
+        else igSurvivors.splice(igSurvivors.indexOf(u), 1);
+      } else {
+        console.log(`     ✅ 地区=DE ${detail.topCountry?.pct}% + 城市=${detail.topCity?.name} + 女粉 ${femaleStr}`);
+      }
+    }
+    if (Object.keys(cache).length === 0) {
+      console.log(`   💡 提示: 缓存为空。运行 scripts/refresh_wednesday_cache.mjs 更新 Wednesday 数据`);
+    }
+  }
 
   // === STAGE 2 ===
   const stage2DatasetMap = {};
@@ -412,25 +533,43 @@ async function main() {
     for (const u of ttSurvivors) {
       const p = ttProfiles[u];
       const posts = ttPostsByUser[u] || [];
-      const de = posts.filter(x => x.lang === 'de').length;
-      const en = posts.filter(x => x.lang === 'en').length;
-      const dePct = (de + en) > 0 ? Math.round(de * 100 / (de + en)) : null;
+      const wdKey = `TT:${u}`;
+      const wd = wednesdayData[wdKey];
       const recent = posts.filter(x => new Date(x.createTime) > threeMonthsAgo);
       const avgViews = recent.length > 0 ? Math.round(recent.reduce((s, x) => s + x.playCount, 0) / recent.length) : 0;
-      const j = judgeFromCaption('TT', p, dePct, avgViews);
-      results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, ...j, avgViews };
-      survivorMeta[`TT:${u}`] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
+      const genderFemale = wd?.genderFemale ?? null;
+
+      if (wd?.found && wd.regionPass && wd.genderPass) {
+        // Wednesday 确认 → 跳过语言检测，只判定 avgViews + fans
+        const regionAccurate = '是 (Wednesday)';
+        const isReplaceByFans = p.fans < FAN_REPLACE;
+        let viewStatus;
+        if (avgViews >= VIEW_OK) viewStatus = 'pass';
+        else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
+        else viewStatus = 'fail';
+        if (viewStatus === 'fail') {
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
+        } else if (isReplaceByFans || viewStatus === 'replace') {
+          const rs = []; if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`); if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '🟡 置换组', reason: rs.join('; ') };
+        } else {
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '✅ 是', reason: '-' };
+        }
+      } else {
+        // 无 Wednesday 数据 → 原流程
+        const de = posts.filter(x => x.lang === 'de').length;
+        const en = posts.filter(x => x.lang === 'en').length;
+        const dePct = (de + en) > 0 ? Math.round(de * 100 / (de + en)) : null;
+        const j = judgeFromCaption('TT', p, dePct, avgViews);
+        results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale };
+      }
+      survivorMeta[wdKey] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
     for (const u of igSurvivors) {
       const p = igProfiles[u];
       const posts = igPostsByUser[u] || [];
-      const captions = posts.filter(x => x.caption && x.caption.trim().length > 5);
-      let g = 0, e = 0;
-      for (const post of captions) {
-        const lang = detectLang(post.caption);
-        if (lang === 'de') g++; else if (lang === 'en') e++;
-      }
-      const dePct = (g + e) > 0 ? Math.round(g * 100 / (g + e)) : null;
+      const wdKey = `IG:${u}`;
+      const wd = wednesdayData[wdKey];
       const recentVideos = posts.filter(x =>
         (x.type === 'Video' || (x.videoPlayCount && x.videoPlayCount > 0)) &&
         x.timestamp && new Date(x.timestamp) > threeMonthsAgo
@@ -440,9 +579,37 @@ async function main() {
         const views = recentVideos.map(x => x.videoPlayCount || x.videoViewCount || 0);
         avgViews = Math.round(views.reduce((s, v) => s + v, 0) / views.length);
       }
-      const j = judgeFromCaption('IG', p, dePct, avgViews);
-      results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, ...j, avgViews };
-      survivorMeta[`IG:${u}`] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
+      const genderFemale = wd?.genderFemale ?? null;
+
+      if (wd?.found && wd.regionPass && wd.genderPass) {
+        // Wednesday 确认 → 跳过语言检测，只判定 avgViews + fans
+        const regionAccurate = '是 (Wednesday)';
+        const isReplaceByFans = p.fans < FAN_REPLACE;
+        let viewStatus;
+        if (avgViews >= VIEW_OK) viewStatus = 'pass';
+        else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
+        else viewStatus = 'fail';
+        if (viewStatus === 'fail') {
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
+        } else if (isReplaceByFans || viewStatus === 'replace') {
+          const rs = []; if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`); if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '🟡 置换组', reason: rs.join('; ') };
+        } else {
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '✅ 是', reason: '-' };
+        }
+      } else {
+        // 无 Wednesday 数据 → 原流程
+        const captions = posts.filter(x => x.caption && x.caption.trim().length > 5);
+        let g = 0, e = 0;
+        for (const post of captions) {
+          const lang = detectLang(post.caption);
+          if (lang === 'de') g++; else if (lang === 'en') e++;
+        }
+        const dePct = (g + e) > 0 ? Math.round(g * 100 / (g + e)) : null;
+        const j = judgeFromCaption('IG', p, dePct, avgViews);
+        results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale };
+      }
+      survivorMeta[wdKey] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
 
     const map = { 'tt-profile': 'tt_profiles_stage1.json', 'tt-posts': 'tt_profiles.json', 'ig-profile': 'ig_profiles.json', 'ig-posts': 'ig_posts.json' };
@@ -520,7 +687,8 @@ async function main() {
       const meta = survivorMeta[k];
       const dePct = stats && (stats.de + stats.en) > 0 ? Math.round(stats.de * 100 / (stats.de + stats.en)) : null;
       const j = finalizeWithComments(p, meta.avgViews, dePct);
-      results[k] = { platform, name: user, fans: p.fans, posts: p.posts, ...j, avgViews: meta.avgViews };
+      const existing = results[k];
+      results[k] = { platform, name: user, fans: p.fans, posts: p.posts, ...j, avgViews: meta.avgViews, genderFemale: existing?.genderFemale ?? null };
       const statSummary = stats ? `(de=${stats.de}, en=${stats.en}, total=${stats.total})` : '(无评论数据)';
       console.log(`   ${k}: 评论 ${dePct ?? '?'}% ${statSummary} → ${j.verdict}`);
     }
@@ -531,15 +699,16 @@ async function main() {
 
   // === 输出表 ===
   console.log('\n=== 最终判定（按粘贴顺序）===\n');
-  const header = '| # | 平台 | 用户名 | 粉丝数量 | 帖数 | 地区是否准确 | 近三月平均浏览量 | 是否合适 | 原因 |';
-  const sep = '|---|------|--------|---------|------|-------------|-----------------|---------|------|';
+  const header = '| # | 平台 | 用户名 | 粉丝数量 | 帖数 | 地区是否准确 | 近三月平均浏览量 | 女粉占比 | 是否合适 | 原因 |';
+  const sep = '|---|------|--------|---------|------|-------------|-----------------|---------|---------|------|';
   const rows = inputOrder.map((u, i) => {
     const r = results[`${u.platform}:${u.username}`];
-    if (!r) return `| ${i + 1} | ${u.platform} | ${u.username} | - | - | - | - | ⚠️ 抓取失败 | - |`;
+    if (!r) return `| ${i + 1} | ${u.platform} | ${u.username} | - | - | - | - | - | ⚠️ 抓取失败 | - |`;
     const fansStr = r.fans == null ? '-' : r.fans.toLocaleString();
     const postsStr = r.posts == null ? '-' : r.posts;
     const viewsStr = r.avgViews == null ? '-' : r.avgViews.toLocaleString();
-    return `| ${i + 1} | ${r.platform} | ${r.name} | ${fansStr} | ${postsStr} | ${r.regionAccurate} | ${viewsStr} | ${r.verdict} | ${r.reason} |`;
+    const genderStr = r.genderFemale != null ? `${r.genderFemale}%` : '无信息';
+    return `| ${i + 1} | ${r.platform} | ${r.name} | ${fansStr} | ${postsStr} | ${r.regionAccurate} | ${viewsStr} | ${genderStr} | ${r.verdict} | ${r.reason} |`;
   });
   const stats = {};
   for (const k of Object.keys(results)) stats[results[k].verdict] = (stats[results[k].verdict] || 0) + 1;
@@ -562,7 +731,7 @@ async function main() {
   const fileContent = [
     `# ${datestamp} 批次 (${inputOrder.length} URL / 去重 ${uniqueTT.length}TT+${uniqueIG.length}IG)`,
     '',
-    `> 规则: v0.4 微调 (caption ${CAPTION_THRESHOLD}% / 评论 ${COMMENT_THRESHOLD}%)`,
+    `> 规则: v0.5 Wednesday 集成 (caption ${CAPTION_THRESHOLD}% / 评论 ${COMMENT_THRESHOLD}% / 男粉≤${GENDER_MALE_MAX}% or >100K≤${GENDER_MALE_MAX_100K}%)`,
     `> 抓取量: ${POSTS_LIMIT} posts/videos per survivor (短路淘汰 ${uniqueTT.length - ttSurvivors.length + uniqueIG.length - igSurvivors.length}/${uniqueTT.length + uniqueIG.length})`,
     warnList.length > 0 ? `> STAGE 3 评论检查: ${warnList.length} 人` : `> STAGE 3 评论检查: 无 ⚠️，跳过`,
     `> Apify 成本: $${totalUsd.toFixed(4)} (~¥${(totalUsd * USD_TO_CNY).toFixed(2)})`,
