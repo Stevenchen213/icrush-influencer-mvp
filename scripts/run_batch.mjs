@@ -134,6 +134,9 @@ function wednesdayLookup(username) {
   const cache = loadWednesdayCache();
   const entry = cache[username];
   if (!entry || !entry.found) return { found: false };
+  // 国家+城市+性别三者至少有一个有效数据才算"有数据"
+  const hasData = entry.gender || entry.topCountry || entry.topCity;
+  if (!hasData) return { found: false };
   return {
     found: true,
     gender: entry.gender || null,
@@ -265,6 +268,7 @@ function shortCircuit(platform, p) {
       return { fail: true, reason: `帖数 ${p.posts}<${POSTS_MIN}` };
     }
   }
+  if (p.fans === 0 && p.posts > 0) return { fail: true, reason: '粉丝数据抓取异常（fans=0）' };
   if (p.fans < FAN_MIN) return { fail: true, reason: `粉丝 ${p.fans}<1K` };
   if (p.fans > FAN_MAX[platform]) return { fail: true, reason: `粉丝 ${p.fans.toLocaleString()}>${FAN_MAX[platform].toLocaleString()}` };
   return { fail: false };
