@@ -10,9 +10,13 @@
     "analyze": "node scripts/analyze.mjs",
     "analyze-comments": "node scripts/analyze_comments.mjs",
     "extract-urls": "node scripts/extract_urls.mjs",
-    "final-table": "node scripts/final_table.mjs"
+    "final-table": "node scripts/final_table.mjs",
+    "refresh-wednesday": "node --env-file=.env scripts/refresh_wednesday_cache.mjs"
   },
   "engines": {
     "node": ">=20.6.0"
+  },
+  "dependencies": {
+    "playwright": "^1.60.0"
   }
 }
