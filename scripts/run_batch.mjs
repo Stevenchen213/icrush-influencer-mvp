@@ -270,6 +270,106 @@ function shortCircuit(platform, p) {
   return { fail: false };
 }
 
+// === 商单检测与分类 ===
+const COMMERCIAL_SIGNALS = [
+  'ad', 'anzeige', 'werbung', 'sponsored', 'gifted', 'collab', 'collaboration',
+  'paid', 'partner', 'partnership', 'kooperation', 'reklame', 'geschenkt',
+  'presssample', 'prsample', 'pr-sample', 'unbezahlt', 'unbezahlte',
+];
+
+const CATEGORY_KEYWORDS = {
+  food: {
+    brands: ['lieferando', 'hellofresh', 'foodspring', 'koRo', 'yfood', 'huel', 'myprotein', 'dm', 'rewe', 'edeka', 'aldi', 'lidl', 'netto', 'penny', 'kaufland', 'foodpanda', 'wolt', 'flink', 'gorillas', 'getir', 'milka', 'kinder', 'ferrero', 'haribo', 'nimm2', 'rittersport', 'lindt', 'knoppers', 'bahlsen'],
+    keywords: ['food', 'foodie', 'foodblog', 'foodporn', 'essen', 'lecker', 'kochen', 'rezept', 'backen', 'frühstück', 'breakfast', 'lunch', 'dinner', 'restaurant', 'café', 'kaffee', 'coffee', 'smoothie', 'bowl', 'salat', 'vegan', 'vegetarisch', 'bio', 'organic'],
+  },
+  tech: {
+    brands: ['apple', 'samsung', 'huawei', 'xiaomi', 'google', 'microsoft', 'sony', 'dell', 'hp', 'lenovo', 'logitech', 'amazon', 'otto', 'saturn', 'mediamarkt', 'cyberport', 'alternate', 'mindfactory', 'caseking', 'bequiet', 'corsair', 'razer', 'logitech', 'nvidia', 'amd', 'intel', 'oneplus', 'nothing', 'bose', 'sonos', 'jbl', 'marshall', 'sennheiser', 'telekom', 'vodafone', 'o2', 'congstar'],
+    keywords: ['tech', 'technology', 'technik', 'gadget', 'smartphone', 'handy', 'laptop', 'tablet', 'pc', 'computer', 'gaming', 'zocken', 'setup', 'unboxing', 'review', 'test', 'testbericht', 'kopfhörer', 'headphones'],
+  },
+  beauty: {
+    brands: ['douglas', 'sephora', 'dm', 'rossmann', 'müller', 'bipa', 'essence', 'catrice', 'maybelline', "l'oréal", 'loreal', 'nivea', 'balea', 'rituals', 'kiehls', 'laneige', 'glossier', 'fenty', 'kylie', 'nyx', 'mac', 'clinique', 'esteelauder', 'shiseido', 'neutrogena', 'garnier', 'babor', 'drhauschka', 'lavera', 'weleda'],
+    keywords: ['beauty', 'makeup', 'make-up', 'skincare', 'skincareroutine', 'kosmetik', 'pflege', 'hautpflege', 'gesichtspflege', 'lippenstift', 'mascara', 'foundation', 'nagellack', 'nails', 'nägel', 'augenbrauen', 'brows', 'lashes', 'haare', 'hair', 'haircare', 'frisur', 'friseur', 'parfüm', 'duft'],
+  },
+  fashion: {
+    brands: ['hm', 'h&m', 'zara', 'mango', 'bershka', 'pullandbear', 'stradivarius', 'asos', 'aboutyou', 'zalando', 'uniqlo', 'cos', 'arket', 'otherstories', 'massimodutti', 'adidas', 'nike', 'puma', 'reebok', 'levis', 'levi', 'tommyhilfiger', 'calvinklein', 'esprit', 's.Oliver', 'only', 'veroModa', 'newyorker', 'primark', 'cunda', 'peekcloppenburg', 'breuninger', 'mytheresa', 'farfetch', 'shein', 'cider', 'nakdfashion'],
+    keywords: ['fashion', 'mode', 'outfit', 'outfits', 'ootd', 'style', 'streetstyle', 'look', 'lookbook', 'kleidung', 'klamotten', 'kombi', 'styling', 'haul', 'tryon', 'anprobe', 'passform', 'fit', 'trend', 'trends', 'kollektion', 'collection'],
+  },
+  jewelry: {
+    brands: ['pandora', 'swarovski', 'thomassabo', 'christ', 'bijoubrigitte', 'douglas', 'swatch', 'fossil', 'michaelkors', 'tiffany', 'cartier', 'bulgari', 'apmmonaco', 'lucardi', 'siegel', 'engelsrufer', 'nomination', 'sogniadoro', 'lesgeorgettes', 'anschmuck', 'newbielovers', 'arshajewellery', 'marenjewelry', 'pukka', 'akind', 'purelei'],
+    keywords: ['jewelry', 'jewellery', 'schmuck', 'schmuckstück', 'kette', 'halskette', 'ring', 'ringe', 'ohrringe', 'earrings', 'armband', 'armreif', 'bracelet', 'bangle', 'anhänger', 'pendant', 'gold', 'silber', 'sterling', 'vergoldet', 'goldplated', 'versilbert', 'edelstein', 'diamant', 'perlen', 'statement', 'minimal', 'layering'],
+  },
+};
+
+function isCommercial(text, hashtags, isAd, isSponsored) {
+  if (isAd || isSponsored) return true;
+  const combined = ((text || '') + ' ' + (hashtags || []).join(' ')).toLowerCase();
+  return COMMERCIAL_SIGNALS.some(s => {
+    if (s.length <= 4) {
+      const re = new RegExp('(?:^|[#\\s])' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\s.,!?])', 'i');
+      return re.test(combined);
+    }
+    return combined.includes(s);
+  });
+}
+
+function classifyCommercial(text, hashtags, mentions, taggedUsers) {
+  const combined = [
+    (text || '').toLowerCase(),
+    (hashtags || []).join(' ').toLowerCase(),
+    (mentions || []).join(' ').toLowerCase(),
+    (taggedUsers || []).map(t => (t.username || t.full_name || '').toLowerCase()).join(' '),
+  ].join(' ');
+
+  const scores = {};
+  for (const [cat, data] of Object.entries(CATEGORY_KEYWORDS)) {
+    let score = 0;
+    for (const b of data.brands) { if (combined.includes(b.toLowerCase())) score += 3; }
+    for (const k of data.keywords) { if (combined.includes(k.toLowerCase())) score += 1; }
+    scores[cat] = score;
+  }
+
+  const entries = Object.entries(scores).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return '其他';
+  // 取 top 2，score 差距不大说明跨类
+  const top = entries.slice(0, 2);
+  if (top.length === 2 && top[0][1] >= 3 && top[0][1] >= top[1][1] * 2) return top[0][0];
+  if (top.length === 2 && top[0][1] <= top[1][1] * 1.5) return `${top[0][0]}+${top[1][0]}`;
+  return top[0][0];
+}
+
+const CAT_LABELS = { food: '食品', tech: '科技', beauty: '美妆', fashion: '服饰', jewelry: '珠宝' };
+function formatCommercialStats(stats) {
+  if (!stats || stats.total === 0) return '无';
+  const parts = [];
+  for (const [cat, label] of Object.entries(CAT_LABELS)) {
+    if (stats[cat] > 0) parts.push(`${label}×${stats[cat]}`);
+  }
+  if (stats.其他 > 0) parts.push(`其他×${stats.其他}`);
+  return `${parts.join(', ')} | 共${stats.total}条`;
+}
+
+function analyzeCommercial(posts, platform, threeMonthsAgo) {
+  const recent = posts.filter(x => {
+    const ts = x.timestamp || x.createTime;
+    return ts && new Date(ts) > threeMonthsAgo;
+  });
+  const stats = { total: 0, food: 0, tech: 0, beauty: 0, fashion: 0, jewelry: 0, 其他: 0 };
+  for (const p of recent) {
+    const text = p.caption || p.text || '';
+    const hashtags = p.hashtags || [];
+    const isAd = p.isAd || false;
+    const isSponsored = p.isSponsored || false;
+    const mentions = p.mentions || (p.detailedMentions || []).map(m => m.name || '').filter(Boolean);
+    const taggedUsers = p.taggedUsers || [];
+    if (!isCommercial(text, hashtags, isAd, isSponsored)) continue;
+    stats.total++;
+    const cat = classifyCommercial(text, hashtags, mentions, taggedUsers);
+    if (stats[cat] !== undefined) stats[cat]++;
+    else stats['其他']++;
+  }
+  return stats;
+}
+
 // 仅 caption 判定（STAGE 2 之后；返回 ⚠️ 的会进 STAGE 3）
 function judgeFromCaption(platform, p, dePct, avgViews) {
   const sc = shortCircuit(platform, p);
@@ -423,16 +523,16 @@ async function main() {
   const ttSurvivors = [], igSurvivors = [];
   for (const u of uniqueTT) {
     const p = ttProfiles[u];
-    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', reason: 'TT profile 抓取无返回' }; continue; }
+    if (!p) { results[`TT:${u}`] = { platform: 'TT', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', commercialStats: null, reason: 'TT profile 抓取无返回' }; continue; }
     const sc = shortCircuit('TT', p);
-    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`TT:${u}`] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, commercialStats: null, verdict: '❌ 否', reason: sc.reason };
     else ttSurvivors.push(u);
   }
   for (const u of uniqueIG) {
     const p = igProfiles[u];
-    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', reason: 'IG profile 抓取无返回' }; continue; }
+    if (!p) { results[`IG:${u}`] = { platform: 'IG', name: u, fans: null, posts: null, regionAccurate: '-', avgViews: null, genderFemale: null, verdict: '⚠️ 抓取失败', commercialStats: null, reason: 'IG profile 抓取无返回' }; continue; }
     const sc = shortCircuit('IG', p);
-    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, verdict: '❌ 否', reason: sc.reason };
+    if (sc.fail) results[`IG:${u}`] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate: p.region ? '是' : '-', avgViews: null, genderFemale: null, commercialStats: null, verdict: '❌ 否', reason: sc.reason };
     else igSurvivors.push(u);
   }
   console.log(`\n⚡ 短路淘汰: TT ${uniqueTT.length - ttSurvivors.length}/${uniqueTT.length}, IG ${uniqueIG.length - igSurvivors.length}/${uniqueIG.length}`);
@@ -470,14 +570,14 @@ async function main() {
       };
       if (!regionR.pass) {
         // 地区不通过 → ❌
-        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '否 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, verdict: '❌ 否', reason: regionR.reason };
+        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '否 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, commercialStats: null, verdict: '❌ 否', reason: regionR.reason };
         console.log(`     ❌ 地区不通过: ${regionR.reason}`);
         // 从 survivor 列表中移除
         if (platform === 'TT') ttSurvivors.splice(ttSurvivors.indexOf(u), 1);
         else igSurvivors.splice(igSurvivors.indexOf(u), 1);
       } else if (!genderR.pass) {
         // 性别不通过 → ❌
-        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '是 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, verdict: '❌ 否', reason: genderR.reason };
+        results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '是 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, commercialStats: null, verdict: '❌ 否', reason: genderR.reason };
         console.log(`     ❌ 性别不通过: ${genderR.reason} (女粉 ${femaleStr})`);
         if (platform === 'TT') ttSurvivors.splice(ttSurvivors.indexOf(u), 1);
         else igSurvivors.splice(igSurvivors.indexOf(u), 1);
@@ -538,6 +638,7 @@ async function main() {
       const recent = posts.filter(x => new Date(x.createTime) > threeMonthsAgo);
       const avgViews = recent.length > 0 ? Math.round(recent.reduce((s, x) => s + x.playCount, 0) / recent.length) : 0;
       const genderFemale = wd?.genderFemale ?? null;
+      const commercialStats = analyzeCommercial(posts, 'TT', threeMonthsAgo);
 
       if (wd?.found && wd.regionPass && wd.genderPass) {
         // Wednesday 确认 → 跳过语言检测，只判定 avgViews + fans
@@ -548,12 +649,12 @@ async function main() {
         else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
         else viewStatus = 'fail';
         if (viewStatus === 'fail') {
-          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
         } else if (isReplaceByFans || viewStatus === 'replace') {
           const rs = []; if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`); if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
-          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '🟡 置换组', reason: rs.join('; ') };
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '🟡 置换组', reason: rs.join('; ') };
         } else {
-          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '✅ 是', reason: '-' };
+          results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '✅ 是', reason: '-' };
         }
       } else {
         // 无 Wednesday 数据 → 原流程
@@ -561,7 +662,7 @@ async function main() {
         const en = posts.filter(x => x.lang === 'en').length;
         const dePct = (de + en) > 0 ? Math.round(de * 100 / (de + en)) : null;
         const j = judgeFromCaption('TT', p, dePct, avgViews);
-        results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale };
+        results[wdKey] = { platform: 'TT', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale, commercialStats };
       }
       survivorMeta[wdKey] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
@@ -580,6 +681,7 @@ async function main() {
         avgViews = Math.round(views.reduce((s, v) => s + v, 0) / views.length);
       }
       const genderFemale = wd?.genderFemale ?? null;
+      const commercialStats = analyzeCommercial(posts, 'IG', threeMonthsAgo);
 
       if (wd?.found && wd.regionPass && wd.genderPass) {
         // Wednesday 确认 → 跳过语言检测，只判定 avgViews + fans
@@ -590,12 +692,12 @@ async function main() {
         else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
         else viewStatus = 'fail';
         if (viewStatus === 'fail') {
-          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '❌ 否', reason: `近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}` };
         } else if (isReplaceByFans || viewStatus === 'replace') {
           const rs = []; if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`); if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
-          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '🟡 置换组', reason: rs.join('; ') };
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '🟡 置换组', reason: rs.join('; ') };
         } else {
-          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, verdict: '✅ 是', reason: '-' };
+          results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, regionAccurate, avgViews, genderFemale, commercialStats, verdict: '✅ 是', reason: '-' };
         }
       } else {
         // 无 Wednesday 数据 → 原流程
@@ -607,7 +709,7 @@ async function main() {
         }
         const dePct = (g + e) > 0 ? Math.round(g * 100 / (g + e)) : null;
         const j = judgeFromCaption('IG', p, dePct, avgViews);
-        results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale };
+        results[wdKey] = { platform: 'IG', name: u, fans: p.fans, posts: p.posts, ...j, avgViews, genderFemale, commercialStats };
       }
       survivorMeta[wdKey] = { avgViews, urls: posts.map(x => x.url).filter(Boolean) };
     }
@@ -688,7 +790,7 @@ async function main() {
       const dePct = stats && (stats.de + stats.en) > 0 ? Math.round(stats.de * 100 / (stats.de + stats.en)) : null;
       const j = finalizeWithComments(p, meta.avgViews, dePct);
       const existing = results[k];
-      results[k] = { platform, name: user, fans: p.fans, posts: p.posts, ...j, avgViews: meta.avgViews, genderFemale: existing?.genderFemale ?? null };
+      results[k] = { platform, name: user, fans: p.fans, posts: p.posts, ...j, avgViews: meta.avgViews, genderFemale: existing?.genderFemale ?? null, commercialStats: existing?.commercialStats ?? null };
       const statSummary = stats ? `(de=${stats.de}, en=${stats.en}, total=${stats.total})` : '(无评论数据)';
       console.log(`   ${k}: 评论 ${dePct ?? '?'}% ${statSummary} → ${j.verdict}`);
     }
@@ -697,18 +799,28 @@ async function main() {
   // 清掉 _pendingComments 标记（如果还有）
   for (const k of Object.keys(results)) delete results[k]._pendingComments;
 
+  // 商单复查：✅ 但近3月无商单 → 改为 🟡 复查
+  for (const k of Object.keys(results)) {
+    const r = results[k];
+    if (r.verdict === '✅ 是' && r.commercialStats && r.commercialStats.total === 0) {
+      r.verdict = '🟡 复查';
+      r.reason = '其他条件通过但近3月无商单';
+    }
+  }
+
   // === 输出表 ===
   console.log('\n=== 最终判定（按粘贴顺序）===\n');
-  const header = '| # | 平台 | 用户名 | 粉丝数量 | 帖数 | 地区是否准确 | 近三月平均浏览量 | 女粉占比 | 是否合适 | 原因 |';
-  const sep = '|---|------|--------|---------|------|-------------|-----------------|---------|---------|------|';
+  const header = '| # | 平台 | 用户名 | 粉丝数量 | 帖数 | 地区是否准确 | 近三月平均浏览量 | 女粉占比 | 近3月商单 | 是否合适 | 原因 |';
+  const sep = '|---|------|--------|---------|------|-------------|-----------------|---------|---------|---------|------|';
   const rows = inputOrder.map((u, i) => {
     const r = results[`${u.platform}:${u.username}`];
-    if (!r) return `| ${i + 1} | ${u.platform} | ${u.username} | - | - | - | - | - | ⚠️ 抓取失败 | - |`;
+    if (!r) return `| ${i + 1} | ${u.platform} | ${u.username} | - | - | - | - | - | - | ⚠️ 抓取失败 | - |`;
     const fansStr = r.fans == null ? '-' : r.fans.toLocaleString();
     const postsStr = r.posts == null ? '-' : r.posts;
     const viewsStr = r.avgViews == null ? '-' : r.avgViews.toLocaleString();
     const genderStr = r.genderFemale != null ? `${r.genderFemale}%` : '无信息';
-    return `| ${i + 1} | ${r.platform} | ${r.name} | ${fansStr} | ${postsStr} | ${r.regionAccurate} | ${viewsStr} | ${genderStr} | ${r.verdict} | ${r.reason} |`;
+    const commercialStr = formatCommercialStats(r.commercialStats);
+    return `| ${i + 1} | ${r.platform} | ${r.name} | ${fansStr} | ${postsStr} | ${r.regionAccurate} | ${viewsStr} | ${genderStr} | ${commercialStr} | ${r.verdict} | ${r.reason} |`;
   });
   const stats = {};
   for (const k of Object.keys(results)) stats[results[k].verdict] = (stats[results[k].verdict] || 0) + 1;
