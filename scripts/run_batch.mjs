@@ -283,7 +283,7 @@ const COMMERCIAL_SIGNALS = [
 
 const CATEGORY_KEYWORDS = {
   food: {
-    brands: ['lieferando', 'hellofresh', 'foodspring', 'koRo', 'yfood', 'huel', 'myprotein', 'dm', 'rewe', 'edeka', 'aldi', 'lidl', 'netto', 'penny', 'kaufland', 'foodpanda', 'wolt', 'flink', 'gorillas', 'getir', 'milka', 'kinder', 'ferrero', 'haribo', 'nimm2', 'rittersport', 'lindt', 'knoppers', 'bahlsen'],
+    brands: ['lieferando', 'hellofresh', 'foodspring', 'koRo', 'yfood', 'huel', 'myprotein', 'more nutrition', 'dm', 'rewe', 'edeka', 'aldi', 'lidl', 'netto', 'penny', 'kaufland', 'foodpanda', 'wolt', 'flink', 'gorillas', 'getir', 'milka', 'kinder', 'ferrero', 'haribo', 'nimm2', 'rittersport', 'lindt', 'knoppers', 'bahlsen'],
     keywords: ['food', 'foodie', 'foodblog', 'foodporn', 'essen', 'lecker', 'kochen', 'rezept', 'backen', 'frühstück', 'breakfast', 'lunch', 'dinner', 'restaurant', 'café', 'kaffee', 'coffee', 'smoothie', 'bowl', 'salat', 'vegan', 'vegetarisch', 'bio', 'organic'],
   },
   tech: {
@@ -354,8 +354,11 @@ function formatCommercialStats(stats) {
 
 function analyzeCommercial(posts, platform, threeMonthsAgo) {
   const recent = posts.filter(x => {
-    const ts = x.timestamp || x.createTime;
-    return ts && new Date(ts) > threeMonthsAgo;
+    let ts = x.timestamp || x.createTime || x.createTimeRaw;
+    if (!ts) return false;
+    // TT createTimeRaw 是 Unix 秒，JS new Date 需要毫秒
+    if (typeof ts === 'number' && ts < 10000000000) ts = ts * 1000;
+    return new Date(ts) > threeMonthsAgo;
   });
   const stats = { total: 0, food: 0, tech: 0, beauty: 0, fashion: 0, jewelry: 0, 其他: 0 };
   for (const p of recent) {
@@ -622,7 +625,11 @@ async function main() {
           const name = v['authorMeta.name'] || v.authorMeta?.name;
           if (!name) continue;
           (ttPostsByUser[name] = ttPostsByUser[name] || []).push({
-            lang: v.textLanguage, createTime: v.createTimeISO, playCount: v.playCount || 0, url: v.webVideoUrl,
+            lang: v.textLanguage, createTime: v.createTimeISO, createTimeRaw: v.createTime,
+            playCount: v.playCount || 0, url: v.webVideoUrl,
+            text: v.text || '', hashtags: v.hashtags || [],
+            isAd: v.isAd || false, isSponsored: v.isSponsored || false,
+            mentions: v.mentions || [], detailedMentions: v.detailedMentions || [],
           });
         }
       } else {
