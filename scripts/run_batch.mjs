@@ -347,7 +347,8 @@ function classifyCommercial(text, hashtagsRaw, mentionsRaw, taggedUsers) {
 
 const CAT_LABELS = { food: '食品', tech: '科技', beauty: '美妆', fashion: '服饰', jewelry: '珠宝' };
 function formatCommercialStats(stats) {
-  if (!stats || stats.total === 0) return '无';
+  if (!stats) return '-';
+  if (stats.total === 0) return '无';
   const parts = [];
   for (const [cat, label] of Object.entries(CAT_LABELS)) {
     if (stats[cat] > 0) parts.push(`${label}×${stats[cat]}`);
