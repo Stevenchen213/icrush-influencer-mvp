@@ -304,9 +304,11 @@ const CATEGORY_KEYWORDS = {
   },
 };
 
-function isCommercial(text, hashtags, isAd, isSponsored) {
+function isCommercial(text, hashtagsRaw, isAd, isSponsored) {
   if (isAd || isSponsored) return true;
-  const combined = ((text || '') + ' ' + (hashtags || []).join(' ')).toLowerCase();
+  // TT hashtags 可能是 [{name:'...'}] 格式，统一转字符串数组
+  const hashtags = (hashtagsRaw || []).map(h => typeof h === 'string' ? h : (h.name || '')).filter(Boolean);
+  const combined = ((text || '') + ' ' + hashtags.join(' ')).toLowerCase();
   return COMMERCIAL_SIGNALS.some(s => {
     if (s.length <= 4) {
       const re = new RegExp('(?:^|[#\\s])' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\s.,!?])', 'i');
@@ -316,11 +318,13 @@ function isCommercial(text, hashtags, isAd, isSponsored) {
   });
 }
 
-function classifyCommercial(text, hashtags, mentions, taggedUsers) {
+function classifyCommercial(text, hashtagsRaw, mentionsRaw, taggedUsers) {
+  const hashtags = (hashtagsRaw || []).map(h => typeof h === 'string' ? h : (h.name || '')).filter(Boolean);
+  const mentions = (mentionsRaw || []).map(m => typeof m === 'string' ? m : (m.name || '')).filter(Boolean);
   const combined = [
     (text || '').toLowerCase(),
-    (hashtags || []).join(' ').toLowerCase(),
-    (mentions || []).join(' ').toLowerCase(),
+    hashtags.join(' ').toLowerCase(),
+    mentions.join(' ').toLowerCase(),
     (taggedUsers || []).map(t => (t.username || t.full_name || '').toLowerCase()).join(' '),
   ].join(' ');
 
