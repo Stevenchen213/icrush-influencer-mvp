@@ -386,7 +386,7 @@ function judgeFromCaption(platform, p, dePct, avgViews) {
     langStatus = pass ? 'pass' : 'need-comments';
   } else {
     regionAccurate = '-';
-    if (dePct !== null && dePct >= CAPTION_THRESHOLD) langStatus = 'pass';
+    if (dePct !== null && dePct >= CAPTION_THRESHOLD) { langStatus = 'pass'; regionAccurate = '是 (语言)'; }
     else return { verdict: '❌ 否', reason: `bio 无地区 + 语言 ${dePct ?? '?'}%<${CAPTION_THRESHOLD}%`, regionAccurate };
   }
   if (langStatus === 'need-comments') {
@@ -410,24 +410,24 @@ function judgeFromCaption(platform, p, dePct, avgViews) {
 // STAGE 3 后的最终判定：根据评论 dePct + 已有 avgViews 拍板
 function finalizeWithComments(p, avgViews, dePctComments) {
   if (dePctComments === null) {
-    return { verdict: '⚠️ 需人工核查', reason: '评论数据不足（de+en 评论太少无法判定）', regionAccurate: '是' };
+    return { verdict: '⚠️ 需人工核查', reason: '评论数据不足（de+en 评论太少无法判定）', regionAccurate: '是 (评论)' };
   }
   if (dePctComments < COMMENT_THRESHOLD) {
-    return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}%<${COMMENT_THRESHOLD}%`, regionAccurate: '是' };
+    return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}%<${COMMENT_THRESHOLD}%`, regionAccurate: '是 (评论)' };
   }
   const isReplaceByFans = p.fans < FAN_REPLACE;
   let viewStatus;
   if (avgViews >= VIEW_OK) viewStatus = 'pass';
   else if (avgViews >= VIEW_REPLACE) viewStatus = 'replace';
   else viewStatus = 'fail';
-  if (viewStatus === 'fail') return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}% 通过 但近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}`, regionAccurate: '是' };
+  if (viewStatus === 'fail') return { verdict: '❌ 否', reason: `② 评论 ${dePctComments}% 通过 但近 3 月平均浏览 ${avgViews.toLocaleString()}<${VIEW_REPLACE}`, regionAccurate: '是 (评论)' };
   if (isReplaceByFans || viewStatus === 'replace') {
     const rs = [];
     if (isReplaceByFans) rs.push(`粉丝 ${p.fans}<10K`);
     if (viewStatus === 'replace') rs.push(`平均浏览 ${avgViews.toLocaleString()} 在 2000-4000`);
-    return { verdict: '🟡 置换组', reason: `② 评论 ${dePctComments}% 通过；${rs.join('; ')}`, regionAccurate: '是' };
+    return { verdict: '🟡 置换组', reason: `② 评论 ${dePctComments}% 通过；${rs.join('; ')}`, regionAccurate: '是 (评论)' };
   }
-  return { verdict: '✅ 是', reason: '-', regionAccurate: '是' };
+  return { verdict: '✅ 是', reason: '-', regionAccurate: '是 (评论)' };
 }
 
 // === 主流程 ===
