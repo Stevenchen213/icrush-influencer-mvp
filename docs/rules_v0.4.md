@@ -116,7 +116,13 @@
 2. 用户名
 3. 粉丝数量
 4. 帖数
-5. 地区是否准确：是 (Wednesday) / 是 (语言) / 是 (评论) / 是 / 否 (Wednesday) / -
+5. 地区是否准确：
+   - **是 (Wednesday)** — Wednesday API 确认受众国家 #1=DE 且城市#1为德/奥城市
+   - **是 (语言)** — Wednesday 无数据，但 caption 德语 ≥25% 通过
+   - **是 (评论)** — Wednesday 无数据 + caption <25%，但评论德语 ≥60% 通过
+   - **是** — IG 账号 about.country=Germany/Austria 或 bio 明确德国城市
+   - **否 (Wednesday)** — Wednesday API 确认地区不通过（国家非 DE 或占比不足）
+   - **-** — TT 达人 bio 无地区信息
 6. 近三月视频平均浏览量
 7. 女粉占比
 8. 近 3 月商单：格式 "食品×1, 服饰×2 | 共3条" / "无" / "-"（未检测）
