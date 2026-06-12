@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagram / TikTok 主页链接，按硬性条件自动判定"合适 / 不合适 / 置换组 / 需人工核查"，省去手动对照查重表 + 人工核对每个账号的时间。
 
-**当前版本**：v0.5 (2026-06-10)
+**当前版本**：v0.5 (2026-06-12)
 
 ## 🎯 干啥的
 
@@ -79,7 +79,7 @@ npm run run-batch data/input.txt
 1. **解析 URL**（支持 IG `/<user>/` 和 TT `/@<user>` 两种格式，去重 + 保留输入顺序）
 2. **STAGE 1**：抓 profile metadata（IG profile-scraper + TT clockworks `resultsPerPage=1`）
 3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 → 直接 ❌
-4. **STAGE 1.5**：Wednesday/Upfluence 查询（免费）— 受众国家+城市判定地区，性别判定男女粉比
+4. **STAGE 1.5**：Wednesday/Upfluence 查询（免费，**全部达人**含短路淘汰者）— 受众国家+城市判定地区，性别判定男女粉比；已淘汰者仅补全数据不改变判定
 5. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count）；Wednesday 确认者跳过语言检测
 6. **caption 判定**（v0.5 规则 caption 25%）；仅 Wednesday 无数据者需检测语言
 7. **STAGE 3**（仅当有 ⚠️ 时）：调评论 API，每帖 10 条，按 ≥60% 德语二次判定
@@ -121,6 +121,8 @@ npm run extract-urls       # 从 TT profile dataset 抽视频 URL 喂给评论 s
 - **v0.4** (2026-06-08)：加职业筛选（律师/艺术家）+ 平均浏览量分层 + 评论二级检查；修复 TT 语言占比 bug（排除"un"表情视频）
 - **v0.4 微调** (2026-06-08 PM)：① caption 阈值 70%→50%；② 评论阈值 70%→60%；明确"每视频抓 10 条文字评论、表情类不计入分母"
 - **v0.4 微调 2** (2026-06-09)：① caption 阈值 50%→25%；② IG 地区优先读 `about.country`；③ IG 150–199 帖 reel-heavy 豁免帖数淘汰
+- **v0.5** (2026-06-10)：① Wednesday/Upfluence API 集成，受众国家+城市优先判定地区；② 男女粉占比检测（男粉>50%否决）；③ 近3月商单分类检测；④ 商单复查规则；⑤ 输出表新增女粉占比+商单列
+- **v0.5 微调 1** (2026-06-12)：① STAGE 1.5 Wednesday 查询扩展为全部达人（含短路淘汰者，仅补全数据不改变判定）；② refresh_wednesday_cache.mjs 精确用户名匹配修复
 
 ## 🤝 协作
 
