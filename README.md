@@ -131,7 +131,7 @@ npm run extract-urls       # 从 TT profile dataset 抽视频 URL 喂给评论 s
 
 修改规则时：
 1. 改 `docs/rules_v0.4.md`（描述）
-2. 改 `scripts/analyze.mjs`（实现）
+2. 改 `icrush/judges.py`、`icrush/classifier.py` 等对应模块（Python 实现）
 3. Commit message 写明"规则变化：XX → YY"
 4. Push
 
