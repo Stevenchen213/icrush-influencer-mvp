@@ -29,6 +29,7 @@ import path from 'path';
 const TOKEN = process.env.APIFY_TOKEN;
 if (!TOKEN) throw new Error('APIFY_TOKEN 未设置（用 --env-file=.env）');
 
+const SKIP_COMMENTS = process.env.SKIP_COMMENTS === '1';
 const CAPTION_THRESHOLD = 25;
 const COMMENT_THRESHOLD = 60;
 const POSTS_LIMIT = 20;
@@ -552,19 +553,26 @@ async function main() {
   console.log(`   IG 存活: [${igSurvivors.join(', ') || '无'}]`);
 
   // === STAGE 1.5: Wednesday 缓存查询（免费）===
+  // 对所有有 profile 的用户查 Wednesday（含短路淘汰的），
+  // 短路淘汰的仅补全性别/地区信息；存活者正常做硬性判定
   const wednesdayData = {};   // 'IG:user'/'TT:user' → { found, regionPass, genderPass, genderFemale, ... }
-  const wdSurvivors = [...ttSurvivors, ...igSurvivors];
-  if (wdSurvivors.length > 0) {
-    console.log(`\n=== STAGE 1.5: Wednesday 地区+性别查询（${wdSurvivors.length} 人）===`);
+  const allQueried = [...new Set([...uniqueTT, ...uniqueIG])]; // 所有人（含短路的）
+  if (allQueried.length > 0) {
+    const wdCount = [...ttSurvivors, ...igSurvivors].length;
+    console.log(`\n=== STAGE 1.5: Wednesday 地区+性别查询（${allQueried.length} 人，${wdCount} 存活 + ${allQueried.length - wdCount} 已淘汰）===`);
     const cache = loadWednesdayCache();
-    for (const u of wdSurvivors) {
-      const platform = ttSurvivors.includes(u) ? 'TT' : 'IG';
+    for (const u of allQueried) {
+      const platform = (uniqueTT.includes(u) && !uniqueIG.includes(u)) ? 'TT' : (ttProfiles[u] ? 'TT' : 'IG');
       const p = platform === 'TT' ? ttProfiles[u] : igProfiles[u];
+      if (!p) continue;
       const key = `${platform}:${u}`;
+      const isShortCircuited = results[key] && results[key].verdict === '❌ 否';
       const detail = wednesdayLookup(u);
       if (!detail.found) {
-        console.log(`  → ${key}: ❌ 无缓存 → 走原流程`);
-        wednesdayData[key] = { found: false };
+        if (!isShortCircuited) {
+          console.log(`  → ${key}: ❌ 无缓存 → 走原流程`);
+          wednesdayData[key] = { found: false };
+        }
         continue;
       }
       // 地区判定
@@ -580,6 +588,19 @@ async function main() {
         topCountry: detail.topCountry,
         topCity: detail.topCity,
       };
+
+      if (isShortCircuited) {
+        // 已短路淘汰：只补全性别/地区数据，不改变判定
+        const existing = results[key];
+        existing.genderFemale = detail.gender?.female ?? null;
+        // 若原地区判断是 "是" 且 Wednesday 也通过了，升级为 "是 (Wednesday)"
+        if (existing.regionAccurate === '是' && regionR.pass) {
+          existing.regionAccurate = '是 (Wednesday)';
+        }
+        console.log(`     ${key}: 已淘汰但补全数据 → 女粉 ${femaleStr}`);
+        continue;
+      }
+
       if (!regionR.pass) {
         // 地区不通过 → ❌
         results[key] = { platform, name: u, fans: p.fans, posts: p.posts, regionAccurate: '否 (Wednesday)', avgViews: null, genderFemale: detail.gender?.female ?? null, commercialStats: null, verdict: '❌ 否', reason: regionR.reason };
@@ -739,7 +760,13 @@ async function main() {
 
   // === STAGE 3: ⚠️ 评论检查 ===
   const warnList = Object.entries(results).filter(([, r]) => r._pendingComments).map(([k]) => k);
-  if (warnList.length > 0) {
+  if (SKIP_COMMENTS) {
+    for (const k of warnList) {
+      results[k].verdict = '⚠️ 需人工核查';
+      results[k].reason = '跳过评论检查（需人工判定地区）';
+    }
+  }
+  if (warnList.length > 0 && !SKIP_COMMENTS) {
     console.log(`\n=== STAGE 3: ⚠️ 评论检查（${warnList.length} 人）===`);
     const ttWarn = warnList.filter(k => k.startsWith('TT:')).map(k => k.slice(3));
     const igWarn = warnList.filter(k => k.startsWith('IG:')).map(k => k.slice(3));

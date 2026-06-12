@@ -157,45 +157,58 @@ async function main() {
       try {
         const result = await page.evaluate(async ({ username, token }) => {
           // Search
-          const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=5&offset=0', {
+          const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=10&offset=0', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
             body: JSON.stringify({ current_list: '389827', criterias: [{ value: username, weight: 1, field: 'all', type: 'should' }], filters: [], audience_filters: [], social_media_matching_operator: 'or', should_save: false, track_hits_results: 10000, score_model: 'default' }),
           });
           const sd = await sr.json();
-          const infs = sd.influencers || [], igs = sd.instagrams || [];
-          let match = igs.find(m => m.username?.toLowerCase() === username.toLowerCase());
-          if (!match) match = infs.find(x => x.name?.toLowerCase() === username.toLowerCase());
-          if (!match && infs.length) match = infs[0];
-          if (!match) return { found: false };
+          const infs = sd.influencers || [];
 
-          // Detail
-          const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${match.id || match.influencer_id}`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-          });
-          const dd = await dr.json();
-          const med = (dd.instagrams || [])[0] || (dd.tiktoks || [])[0];
-          const aud = med?.audience || {};
-          const g = aud?.gender_image_extractor?.values || null;
-          const c = aud?.country_last_picture?.values || null;
-          const ci = aud?.city_last_picture?.values || null;
-          let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
-          let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
-          return {
-            found: true,
-            gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
-            topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
-            topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
-          };
+          // 策略：对每个候选调详情 API，比对 IG/TT username 精确匹配
+          const candidates = infs.slice(0, 5);
+          for (const inf of candidates) {
+            try {
+              const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${inf.id || inf.influencer_id}`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+              });
+              const dd = await dr.json();
+              const igs = dd.instagrams || [];
+              const tts = dd.tiktoks || [];
+
+              // 精确匹配 social media username
+              const igMatch = igs.find(m => m.username?.toLowerCase() === username.toLowerCase());
+              const ttMatch = tts.find(m => m.username?.toLowerCase() === username.toLowerCase());
+
+              if (igMatch || ttMatch) {
+                const med = igMatch || ttMatch;
+                const aud = med?.audience || {};
+                const g = aud?.gender_image_extractor?.values || null;
+                const c = aud?.country_last_picture?.values || null;
+                const ci = aud?.city_last_picture?.values || null;
+                let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
+                let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
+                return {
+                  found: true,
+                  gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
+                  topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
+                  topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
+                  _matchedName: inf.name,
+                  _matchedVia: igMatch ? 'IG' : 'TT',
+                };
+              }
+            } catch (e) { /* 跳过此候选 */ }
+          }
+          return { found: false, _debug: { searched: candidates.length } };
         }, { username, token });
 
         cache[username] = result;
         if (result.found) {
           const g = result.gender ? `女${result.gender.female}%` : '无性别';
           const c = result.topCountry ? ` ${result.topCountry.code} ${result.topCountry.pct}%` : '';
-          console.log(`✅ ${g}${c}`);
+          console.log(`✅ ${g}${c} (${result._matchedVia}:${result._matchedName})`);
         } else {
-          console.log('❌ 无数据');
+          console.log('❌ 无匹配');
         }
       } catch (e) {
         cache[username] = { found: false, error: e.message };
