@@ -25,6 +25,7 @@ ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagr
 icrush-influencer-mvp/
 ├── scripts/                       # 处理脚本
 │   ├── run_batch.mjs              # 主流水线：一键跑完整批（v0.5 Wednesday 集成）
+│   ├── refresh_wednesday_cache.mjs # Playwright 自动更新 Wednesday 缓存
 │   ├── analyze_mvp_v4.mjs         # 旧版分析脚本
 │   └── ...
 ├── docs/
@@ -97,8 +98,10 @@ npm run run-batch data/input.txt
 ### 三、其他单步脚本（按需）
 
 ```bash
+npm run run-batch data/input.txt    # 主流水线：一键跑完整批判定
+npm run refresh-wednesday user1 user2   # 周三缓存刷新（支持用户名列表或 data/input.txt）
 npm run analyze            # 只跑判定，用 data/ 里已有的 JSON（不调 Apify）
-npm run fetch-comments     # 拉一个评论 dataset（需先填 TT_COMMENTS_DATASET / IG_COMMENTS_DATASET 环境变量）
+npm run fetch-comments     # 拉一个评论 dataset
 npm run analyze-comments   # 评论语言占比检查（② 评论 60% 规则）
 npm run extract-urls       # 从 TT profile dataset 抽视频 URL 喂给评论 scraper
 ```

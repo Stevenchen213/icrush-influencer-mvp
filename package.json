@@ -1,6 +1,6 @@
 {
   "name": "icrush-influencer-mvp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "ICRUSH German/Austrian influencer sourcing MVP - automated judgment pipeline",
   "type": "module",
   "private": true,
