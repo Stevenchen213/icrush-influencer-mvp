@@ -90,7 +90,7 @@
 ### 7. 近 3 月商单数量与类型
 
 - **检测范围**：近 3 个月内发布的帖子/视频
-- **商单信号**：#ad, #anzeige, #werbung, #sponsored, #gifted, #collab, #collaboration, #paid, #partner, #partnership, #kooperation, #reklame, #geschenkt, #presssample, #prsample, #pr-sample, #unbezahlt, #unbezahlte；TT 额外用 `isAd` / `isSponsored` 字段
+- **商单信号**：关键词出现在 caption 文案或 hashtag 中均算（不限 `#` 前缀，如 "Anzeige" 在正文中也命中）；信号词：`ad`, `anzeige`, `werbung`, `sponsored`, `gifted`, `collab`, `collaboration`, `paid`, `partner`, `partnership`, `kooperation`, `reklame`, `geschenkt`, `presssample`, `prsample`, `pr-sample`, `unbezahlt`, `unbezahlte`；TT 额外用 `isAd` / `isSponsored` 字段
 - **类型分类**：食品 / 科技 / 美妆 / 服饰 / 珠宝 / 其他（品牌 + 关键词打分）
 - **复查规则**：若达人所有硬性条件通过但近 3 月商单 = 0 → 降级为 **🟡 复查**（待人工确认是否为素人号）
 - 数据来源：STAGE 2 抓取 20 条 posts/videos，在本地分析（不额外调 API）
