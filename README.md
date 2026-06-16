@@ -1,138 +1,149 @@
 # ICRUSH 德国/奥地利达人筛选 MVP
 
-ICRUSH 国内办公室自动化达人调研流水线 —— 输入一批 Instagram / TikTok 主页链接，按硬性条件自动判定"合适 / 不合适 / 置换组 / 需人工核查"，省去手动对照查重表 + 人工核对每个账号的时间。
+ICRUSH 国内办公室自动化达人调研流水线 —— 输入 Instagram / TikTok 主页链接，按硬性条件自动判定 ✅ 是 / ❌ 否 / 🟡 置换组 / 🟡 复查，省去手动核对时间。
 
-**当前版本**：v0.5 (2026-06-12)
+**当前版本**：v0.6 (2026-06-16)
 
-## 🎯 干啥的
+## 硬性规则速览
 
-给定 N 个达人主页 URL，自动判定每个达人是否符合品牌合作标准：
+| # | 条件 | 阈值 |
+|---|------|------|
+| 1 | 男博主 | 名字匹配 DE/EN/TR 男名 → 直接 ❌（情侣名不拒） |
+| 2 | 职业 | 律师 / 艺术家 → ❌ |
+| 3 | 私密账户 | → ❌ |
+| 4 | 帖数 | < 200（IG reel 占比 >50% 可豁免到 150） |
+| 5 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
+| 6 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
+| 7 | 浏览量 | ≥4000 通过 / 2000-3999 置换 / <2000 否 |
+| 8 | 女粉占比 | 男粉 ≤50%（>100K 放宽到 ≤65%） |
 
-| 硬性条件 | 阈值 |
-|---------|------|
-| 1. 地区 | DE 或 AT（优先 Wednesday 受众国家+城市，fallback caption 25% 德语 + 评论 60% 德语）|
-| 2. 粉丝数 | TT 10K-500K / IG 10K-300K（<10K 置换组，<1K 直接 pass）|
-| 3. 帖数 | TT/IG ≥ 200（私密账户直接 pass）|
-| 4. 近 3 月平均浏览 | ≥4000 / 2000-3999 置换组 / <2000 pass |
-| 5. 职业 | 律师 / 艺术家 → 直接 pass |
-| 6. 女粉占比 | 男粉 >50% 否决（粉丝 >100K 时放宽到 65%）|
+完整规则：**[docs/rules.md](docs/rules.md)**
 
-详细规则见 [docs/rules_v0.4.md](docs/rules_v0.4.md)。
+## 语言检测
 
-## 📂 项目结构
+- 使用 `langdetect` 库（Google 算法）
+- 土耳其语、法语等非 DE/EN → 映射为 unknown，不计入 caption 比例
+- 已修复：旧词表法会把土耳其语（含 ü/ö）误判为德语
+
+## 三级容灾
+
+```
+Apify 失败  →  Playwright headless 自动兜底
+Wednesday 缓存未命中  →  自动 Playwright 实时查询 API
+任何外部服务挂  →  不阻塞主流程
+```
+
+## 项目结构
 
 ```
 icrush-influencer-mvp/
-├── scripts/                       # 处理脚本
-│   ├── run_batch.mjs              # 主流水线：一键跑完整批（v0.5 Wednesday 集成）
-│   ├── refresh_wednesday_cache.mjs # Playwright 自动更新 Wednesday 缓存
-│   ├── analyze_mvp_v4.mjs         # 旧版分析脚本
-│   └── ...
+├── icrush/                     # 核心库
+│   ├── config.py               → 阈值常量
+│   ├── wordlists.py            → 词典（德语/英语/城市/男名）
+│   ├── language.py             → 语言检测(langdetect)、地区、职业、性别
+│   ├── judges.py               → 短路淘汰 + caption 判定
+│   ├── wednesday.py            → 缓存读写 + 自动实时查询
+│   ├── pipeline.py             → 三阶段编排 + Playwright 兜底
+│   ├── classifier.py           → 商单分类
+│   ├── gender.py               → 头像检测预留（需 API key）
+│   └── report.py               → Markdown 表格输出
+├── scripts/                    # 入口脚本
+│   ├── run_batch.py            → 主流水线
+│   └── refresh_wednesday_cache.py → 手动刷新缓存
 ├── docs/
-│   ├── rules_v0.4.md              # 完整规则文档（已更新至 v0.5）
-│   └── workflow.md                # 流水线说明
-├── results/                       # 历次跑的结果
-├── data/                          # 抓回来的原始数据（gitignored）
-├── .env.example                   # 环境变量模板（APIFY_TOKEN + WEDNESDAY_TOKEN）
-├── .gitignore
-├── package.json
+│   └── rules.md                → 完整规则文档
+├── results/                    # 历次跑的结果
+├── data/                       # 抓回来的原始数据 + 缓存（gitignored）
+├── .env                        # 环境变量（gitignored）
+├── .env.example
+├── pyproject.toml              # 依赖清单
 └── README.md
 ```
 
-## 🛠️ 工具栈
-
-- **Apify**：主数据源，靠 Actor 抓 TT/IG 公开数据
-- **Wednesday/Upfluence**：免费受众数据（性别、国家、城市），优先判定地区+男女粉比，节省 Apify 语言检测成本
-  - TT 主页：[`clockworks/tiktok-profile-scraper`](https://apify.com/clockworks/tiktok-profile-scraper)
-  - TT 评论：[`thescrapelab/tiktok-comments-scraper`](https://apify.com/thescrapelab/tiktok-comments-scraper)
-  - IG 主页：[`apify/instagram-profile-scraper`](https://apify.com/apify/instagram-profile-scraper)
-  - IG 帖子：[`apify/instagram-post-scraper`](https://apify.com/apify/instagram-post-scraper)
-  - IG 评论：[`apify/instagram-comment-scraper`](https://apify.com/apify/instagram-comment-scraper)
-- **Node.js 22+**：跑分析脚本（用了原生 `--env-file` 加载 .env）
-
-## 🚀 怎么用
-
-### 一、首次配置（5 分钟）
+## 安装
 
 ```bash
-# 1. clone 仓库
 git clone <repo-url>
 cd icrush-influencer-mvp
-
-# 2. 配置 Apify token
-cp .env.example .env
-# 编辑 .env，把 your_token_here 换成真实 token
-
-# 3. 装依赖（暂时没用，未来加）
-npm install
+pip install -e .
+playwright install chromium
 ```
 
-### 二、跑一批达人（典型流程）
-
-把 profile URL 一行一个写到 `data/input.txt`（或者用 stdin），然后：
-
-```bash
-npm run run-batch data/input.txt
+配置 `.env`：
+```
+APIFY_TOKEN=your_token_here
+WEDNESDAY_EMAIL=it@icrush.de
+WEDNESDAY_PASSWORD=xxx
 ```
 
-这一条命令会自动：
+## 使用
 
-1. **解析 URL**（支持 IG `/<user>/` 和 TT `/@<user>` 两种格式，去重 + 保留输入顺序）
-2. **STAGE 1**：抓 profile metadata（IG profile-scraper + TT clockworks `resultsPerPage=1`）
-3. **短路淘汰**：帖数<200 / 职业=艺术家律师 / 私密 / 粉丝<1K 或超上限 → 直接 ❌
-4. **STAGE 1.5**：Wednesday/Upfluence 查询（免费，**全部达人**含短路淘汰者）— 受众国家+城市判定地区，性别判定男女粉比；已淘汰者仅补全数据不改变判定
-5. **STAGE 2**：仅对 survivors 抓 20 posts/videos（IG 用 `detailedData` 拿 view count）；Wednesday 确认者跳过语言检测
-6. **caption 判定**（v0.5 规则 caption 25%）；仅 Wednesday 无数据者需检测语言
-7. **STAGE 3**（仅当有 ⚠️ 时）：调评论 API，每帖 10 条，按 ≥60% 德语二次判定
-8. **输出表格**含女粉占比列，按粘贴顺序，存到 `results/<日期>_batch<N>_<seq>.md`
-9. **末尾打印真实 Apify 成本**（USD + ¥ ≈）
+```powershell
+# Python 路径
+$py = "C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe"
 
-成本对比（14 unique 达人，9 个短路淘汰，0 个 ⚠️）：
+# 从文件批量跑
+& $py scripts/run_batch.py data/input.txt
 
-| 方案 | ¥ |
-|------|---|
-| 旧手动流程 | ~12 |
-| run-batch（自动短路 + 20 帖 + detailedData）| **~3-4** |
-| run-batch + STAGE 3（每 ⚠️ 约 +¥3-4）| 取决于 ⚠️ 数量 |
+# 从 stdin 单条跑
+echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 
-### 三、其他单步脚本（按需）
-
-```bash
-npm run run-batch data/input.txt    # 主流水线：一键跑完整批判定
-npm run refresh-wednesday user1 user2   # 周三缓存刷新（支持用户名列表或 data/input.txt）
-npm run analyze            # 只跑判定，用 data/ 里已有的 JSON（不调 Apify）
-npm run fetch-comments     # 拉一个评论 dataset
-npm run analyze-comments   # 评论语言占比检查（② 评论 60% 规则）
-npm run extract-urls       # 从 TT profile dataset 抽视频 URL 喂给评论 scraper
+# 手动刷新 Wednesday 缓存
+& $py scripts/refresh_wednesday_cache.py username1 username2
 ```
 
-### 四、看历次结果
+## 流水线步骤
 
-`results/` 目录下每个文件是一次测试的快照。
+1. **解析 URL**（TT + IG 混排，去重保留顺序）
+2. **STAGE 1**：Apify 抓 profile metadata → 短路淘汰（按上述顺序）
+3. **STAGE 1.5**：Wednesday 查询（缓存优先，缓存未命中自动 Playwright 实时查询）
+4. **STAGE 2**：对存活者抓 20 posts，计算 caption 德语率、均浏览、商单
+5. **输出表格**（含 Caption 德语列），存档 `results/<日期>_batch<N>_<seq>.md`
+6. **打印 Apify 成本**
 
-## ⚠️ 安全
+## 判定矩阵
+
+| 条件 | 标记 |
+|------|------|
+| 全通过 + 有商单 | ✅ 是 |
+| 全通过 + 无商单 | 🟡 复查 |
+| 粉丝 <10K 或浏览 2K-4K | 🟡 置换组 |
+| bio DE + caption < 25%（无 Wednesday） | 🟡 复查 |
+| 任一硬条件不满足 | ❌ 否 |
+
+## 依赖
+
+```
+httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
+```
+
+## 安全
 
 - **永远不要 commit `.env`**（含 Apify token）
-- 抓回来的评论/帖子数据按 GDPR 算个人信息，**永远不要 commit `data/`** 下的 JSON
+- 抓回来的数据属个人信息，**永远不要 commit `data/`**
 - 仓库设为 **Private**
 
-## 📜 版本演进
+## 版本演进
 
 - **v0.1** (2026-06-04)：第一版规则，基本指标
 - **v0.2** (2026-06-05)：加 1K-10K 置换组分层
-- **v0.3** (2026-06-05)：调整粉丝上限到 TT 500K / IG 300K
-- **v0.4** (2026-06-08)：加职业筛选（律师/艺术家）+ 平均浏览量分层 + 评论二级检查；修复 TT 语言占比 bug（排除"un"表情视频）
-- **v0.4 微调** (2026-06-08 PM)：① caption 阈值 70%→50%；② 评论阈值 70%→60%；明确"每视频抓 10 条文字评论、表情类不计入分母"
-- **v0.4 微调 2** (2026-06-09)：① caption 阈值 50%→25%；② IG 地区优先读 `about.country`；③ IG 150–199 帖 reel-heavy 豁免帖数淘汰
-- **v0.5** (2026-06-10)：① Wednesday/Upfluence API 集成，受众国家+城市优先判定地区；② 男女粉占比检测（男粉>50%否决）；③ 近3月商单分类检测；④ 商单复查规则；⑤ 输出表新增女粉占比+商单列
-- **v0.5 微调 1** (2026-06-12)：① STAGE 1.5 Wednesday 查询扩展为全部达人（含短路淘汰者，仅补全数据不改变判定）；② refresh_wednesday_cache.mjs 精确用户名匹配修复
+- **v0.3** (2026-06-05)：调整粉丝上限（TT 500K / IG 300K）
+- **v0.4** (2026-06-08)：职业筛选 + 浏览量分层 + 评论检查；修复 TT 语言占比 bug
+- **v0.5** (2026-06-10)：Wednesday API 集成，男女粉检测，商单分类
+- **v0.6** (2026-06-16)：**Python 重写 + 多项规则变更**
+  - Node.js → Python（`icrush/` 模块化）
+  - 语言检测：词表 → `langdetect`（修复土耳其语误判）
+  - 男博主硬规则：名字匹配
+  - bio DE + caption < 25% → 🟡 复查（不再调评论 API，省钱）
+  - Wednesday 缓存未命中自动实时查询
+  - Apify 失败自动 Playwright 兜底
+  - 表格新增 Caption 德语列
+  - GBK 编码兼容修复
 
-## 🤝 协作
+## 协作
 
 修改规则时：
-1. 改 `docs/rules_v0.4.md`（描述）
-2. 改 `icrush/judges.py`、`icrush/classifier.py` 等对应模块（Python 实现）
-3. Commit message 写明"规则变化：XX → YY"
+1. 改 `docs/rules.md`（描述）
+2. 改 `icrush/` 下对应模块（Python 实现）
+3. Commit message 写明规则变化
 4. Push
-
-PR / Issue 直接在 GitHub 上交流。
