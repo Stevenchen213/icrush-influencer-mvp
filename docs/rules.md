@@ -7,6 +7,11 @@
 ### STAGE 0：解析 URL
 提取 IG / TT 用户名，去重。
 
+### STAGE 0.5：Resilience
+- Apify IG profile 抓取失败 → 自动 Playwright 兜底（headless 浏览器解析 meta 标签）
+- Wednesday 缓存未命中 → 自动 Playwright 实时查询 API
+- 任何外部服务挂了都不阻塞主流程
+
 ### STAGE 1：Profile 抓取 + 短路淘汰
 
 按以下顺序检查，命中即停止（省钱优先）：
