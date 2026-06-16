@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -125,6 +126,99 @@ class Pipeline:
             obj = obj.get(part, {})
         return obj if isinstance(obj, (str, int, float, bool, type(None))) else None
 
+    # ── Playwright fallback for Apify failures ───────────────────
+
+    @staticmethod
+    def _parse_follower_count(raw: str) -> int:
+        """Parse follower count from meta text like '1M' or '273K' or '1,234'."""
+        import re
+        raw = raw.strip().replace(",", "")
+        m = re.match(r"([\d.]+)\s*([KkMm]?)", raw)
+        if not m:
+            return 0
+        num = float(m.group(1))
+        unit = m.group(2).upper()
+        if unit == "K":
+            return int(num * 1_000)
+        if unit == "M":
+            return int(num * 1_000_000)
+        return int(num)
+
+    async def _scrape_ig_fallback(self, username: str) -> dict | None:
+        """Use Playwright to scrape IG profile when Apify fails."""
+        try:
+            from playwright.async_api import async_playwright
+
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+                try:
+                    await page.goto(f"https://www.instagram.com/{username}/",
+                                    wait_until="domcontentloaded", timeout=20000)
+                    # Wait for meta tag to populate (IG blocks headless, may need longer)
+                    await page.wait_for_timeout(5000)
+                    # Also try waiting for the meta tag itself
+                    try:
+                        await page.wait_for_selector('meta[name="description"]', timeout=5000)
+                    except Exception:
+                        pass
+
+                    meta = await page.evaluate("""() => {
+                        const m = document.querySelector('meta[name="description"]');
+                        return m ? m.getAttribute('content') : '';
+                    }""")
+
+                    if not meta or len(meta) < 20:
+                        print("❌ meta 为空")
+                        return None
+
+                    # Parse meta: handle both Chinese and English locale formats
+                    # CN: "1M 位粉丝、已关注 Y 人、 Z 篇帖子 - Instagram 用户 Name (@xxx)："bio""
+                    # EN: "1M Followers, 728 Following, 932 Posts - Name (@xxx) on Instagram: "bio""
+                    import re
+
+                    followers = 0
+                    fm = re.search(r"([\d.,]+[KkMm]?)\s*(?:位粉丝|Followers?)", meta)
+                    if fm:
+                        followers = self._parse_follower_count(fm.group(1))
+
+                    posts = 0
+                    pm = re.search(r"(\d[\d,]*)\s*(?:篇帖子|Posts?)", meta)
+                    if pm:
+                        posts = int(pm.group(1).replace(",", ""))
+
+                    name = username
+                    nm = re.search(r"(?:Instagram 用户 |on Instagram: )(.+?) \(@", meta)
+                    if nm:
+                        name = nm.group(1).strip()
+
+                    bio = ""
+                    bm = re.search(r'\s[："]([^"]+)"$', meta)
+                    if bm:
+                        bio = bm.group(1).replace("\\n", "\n")
+
+                    if followers == 0 and posts == 0:
+                        print(f"⚠️ 解析失败，meta length={len(meta)}, preview={meta[:120]}")
+                        return None
+
+                    print(f"     ✅ Playwright 兜底: {followers:,}粉 {posts}帖")
+
+                    return {
+                        "username": username,
+                        "fullName": name,
+                        "followersCount": followers,
+                        "postsCount": posts,
+                        "biography": bio,
+                        "businessCategoryName": None,
+                        "private": False,
+                        "latestPosts": [],
+                    }
+                finally:
+                    await browser.close()
+        except Exception as e:
+            print(f"     ⚠️ Playwright 兜底失败: {e}")
+            return None
+
     # ── STAGE 1 ──────────────────────────────────────────────────
 
     async def _stage1_profiles(
@@ -184,6 +278,9 @@ class Pipeline:
                     }
             else:
                 for p in items:
+                    username = p.get("username")
+                    if not username:
+                        continue  # skip malformed entries
                     about_country = (p.get("about") or {}).get("country", "")
                     if about_country == "Germany":
                         region = {"region": "DE", "city": "about.country"}
@@ -192,7 +289,7 @@ class Pipeline:
                     else:
                         region = detect_region(p.get("biography", ""))
 
-                    ig_profiles[p["username"]] = {
+                    ig_profiles[username] = {
                         "name": p["username"],
                         "fullName": p.get("fullName", ""),
                         "fans": p.get("followersCount", 0),
@@ -208,6 +305,37 @@ class Pipeline:
         # Fill TT occupations
         for name, p in tt_profiles.items():
             p["occupation"] = _occ(p.get("bio", ""), p.get("category"))
+
+        # Playwright fallback for IG users Apify missed
+        missed_ig = [u for u in ig_users if u not in ig_profiles]
+        if missed_ig:
+            print(f"\n   🔄 Apify 漏了 {len(missed_ig)} 个 IG 账号，Playwright 兜底...")
+            for u in missed_ig:
+                sys.stdout.write(f"     → {u} ... ")
+                sys.stdout.flush()
+                fallback = await self._scrape_ig_fallback(u)
+                if fallback:
+                    about_country = (fallback.get("about") or {}).get("country", "")
+                    if about_country == "Germany":
+                        region = {"region": "DE", "city": "about.country"}
+                    elif about_country == "Austria":
+                        region = {"region": "AT", "city": "about.country"}
+                    else:
+                        region = detect_region(fallback.get("biography", ""))
+                    ig_profiles[u] = {
+                        "name": fallback["username"],
+                        "fullName": fallback.get("fullName", ""),
+                        "fans": fallback.get("followersCount", 0),
+                        "posts": fallback.get("postsCount", 0),
+                        "bio": fallback.get("biography", ""),
+                        "category": fallback.get("businessCategoryName"),
+                        "private": fallback.get("private", False),
+                        "region": region,
+                        "occupation": _occ(fallback.get("biography", ""), fallback.get("businessCategoryName")),
+                        "latestPosts": fallback.get("latestPosts", []),
+                    }
+                else:
+                    print("❌")
 
         return tt_profiles, ig_profiles
 
