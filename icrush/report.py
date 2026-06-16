@@ -19,11 +19,11 @@ def build_markdown_table(input_order: list[dict], results: dict) -> str:
     """
     header = (
         "| # | 平台 | 用户名 | 粉丝数量 | 帖数 | 地区是否准确 "
-        "| 近三月平均浏览量 | 女粉占比 | 近3月商单 | 是否合适 | 原因 |"
+        "| 近三月平均浏览量 | 女粉占比 | Caption 德语 | 近3月商单 | 是否合适 | 原因 |"
     )
     sep = (
         "|---|------|--------|---------|------|-------------"
-        "|-----------------|---------|---------|---------|------|"
+        "|-----------------|---------|-------------|---------|---------|------|"
     )
 
     rows: list[str] = []
@@ -45,6 +45,7 @@ def build_markdown_table(input_order: list[dict], results: dict) -> str:
             if r.get("genderFemale") is not None
             else "无信息"
         )
+        caption_str = f"{r['_captionDePct']}%" if r.get("_captionDePct") is not None else "-"
         commercial_str = format_commercial_stats(r.get("commercialStats"))
 
         rows.append(
@@ -53,6 +54,7 @@ def build_markdown_table(input_order: list[dict], results: dict) -> str:
             f"| {r.get('regionAccurate', '-')} "
             f"| {views_str} "
             f"| {gender_str} "
+            f"| {caption_str} "
             f"| {commercial_str} "
             f"| {r['verdict']} | {r.get('reason', '-')} |"
         )

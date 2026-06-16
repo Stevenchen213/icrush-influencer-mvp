@@ -139,6 +139,29 @@ def detect_occupation(bio: str, category: str | None) -> str | None:
     return None
 
 
+# ── Male creator detection ──────────────────────────────────────
+
+_MALE_CATEGORY_WORDS = [
+    "men's fashion", "männer", "herren", "menswear", "men's clothing",
+    "male model", "männermode", "herrenmode", "men's style", "mens fashion",
+    "male influencer", "men's lifestyle", "herrenbekleidung",
+]
+
+
+def detect_male_creator(bio: str = "", category: str = "") -> str | None:
+    """Check if a profile appears to be a male creator.
+
+    Returns a reason string if the profile is likely male, or None.
+    """
+    text = f"{bio or ''} {category or ''}".lower()
+
+    for kw in _MALE_CATEGORY_WORDS:
+        if kw in text:
+            return f"男博主（category: {kw}）"
+
+    return None
+
+
 def parse_url(url: str) -> dict | None:
     """Parse an Instagram or TikTok profile URL.
 

@@ -352,6 +352,26 @@ class Pipeline:
             gender_r = judge_gender(detail, p.get("fans", 0))
             female_str = f"{detail['gender']['female']}%" if detail.get("gender") else "无信息"
 
+            # Male creator check: Wednesday shows >80% male → likely male creator
+            male_pct = detail.get("gender", {}).get("male")
+            if male_pct is not None and male_pct > 80:
+                self.results[key] = {
+                    "platform": platform, "name": u,
+                    "fans": p["fans"], "posts": p["posts"],
+                    "regionAccurate": "是 (Wednesday)" if region_r["pass"] else "否 (Wednesday)",
+                    "avgViews": None,
+                    "genderFemale": detail["gender"]["female"],
+                    "commercialStats": None,
+                    "verdict": "❌ 否",
+                    "reason": f"男博主（Wednesday 男粉 {male_pct}%>80%）",
+                }
+                print(f"     ❌ 男博主: 男粉 {male_pct}%>80%")
+                if platform == "TT":
+                    tt_survivors.remove(u)
+                else:
+                    ig_survivors.remove(u)
+                continue
+
             wednesday_data[key] = {
                 "found": True,
                 "regionPass": region_r["pass"],
@@ -542,6 +562,7 @@ class Pipeline:
                     "platform": "TT", "name": u, "fans": p["fans"], "posts": p["posts"],
                     **j, "avgViews": avg_views, "genderFemale": gender_female,
                     "commercialStats": commercial_stats,
+                    "_captionDePct": de_pct,
                 }
 
             self.survivor_meta[wd_key] = {
@@ -616,6 +637,7 @@ class Pipeline:
                     "platform": "IG", "name": u, "fans": p["fans"], "posts": p["posts"],
                     **j, "avgViews": avg_views, "genderFemale": gender_female,
                     "commercialStats": commercial_stats,
+                    "_captionDePct": de_pct,
                 }
 
             self.survivor_meta[wd_key] = {
