@@ -2,92 +2,71 @@
 
 import re
 
+from langdetect import DetectorFactory, detect as _detect_langdetect
+
 from icrush.wordlists import (
     AUSTRIAN_CITIES,
-    ENGLISH_WORDS,
     GERMAN_CITY_ABBR,
     GERMAN_CITY_LIST,
-    GERMAN_WORDS,
     MALE_FIRST_NAMES,
 )
 
-
-def _match_boundary(word: str, text: str) -> bool:
-    """Check if `word` appears as a whole word in `text`."""
-    return bool(re.search(rf"\b{re.escape(word)}\b", text))
+# Force consistent results across runs
+DetectorFactory.seed = 0
 
 
-def detect_lang(text: str) -> str:
-    """Classify short text as 'de', 'en', or 'unknown'.
+def _detect_lang_impl(text: str) -> str:
+    """Classify short text using langdetect library.
 
-    Mirrors run_batch.mjs detectLang() exactly.
+    Returns 'de', 'en', 'tr', or 'unknown'.
     """
     if not text or len(text.strip()) < 5:
         return "unknown"
 
-    lower = text.lower()
-    clean = re.sub(r"https?://\S+", "", lower)
-    clean = re.sub(r"[@#]\w+", "", clean)
+    # Remove URLs and @mentions to reduce noise
+    clean = re.sub(r"https?://\S+", "", text)
+    clean = re.sub(r"[@#]\w+", " ", clean)
 
-    german_char_boost = 0
-    # Turkish uses ü/ö too — check for Turkish-specific chars first
-    is_turkish = bool(re.search(r"[çğışÇĞİŞ]", clean))
-    if not is_turkish and re.search(r"[äöüß]", clean):
-        german_char_boost = 3
-
-    words = [w for w in re.split(r"[\s\W]+", clean) if len(w) >= 2]
-    if len(words) < 2 and german_char_boost < 2:
+    if len(clean.strip()) < 3:
         return "unknown"
 
-    g = sum(1 for w in words if w in GERMAN_WORDS)
-    e = sum(1 for w in words if w in ENGLISH_WORDS)
-    g += german_char_boost
-
-    if g == 0 and e == 0:
+    try:
+        lang = _detect_langdetect(clean)
+        return lang
+    except Exception:
         return "unknown"
-    if g > e * 1.5:
-        return "de"
-    if e > g * 1.5:
-        return "en"
-    if g > e:
-        return "de"
-    return "en"
+
+
+def detect_lang(text: str) -> str:
+    """Classify caption text using langdetect.
+
+    Returns 'de', 'en', or 'unknown' (tr and other non-DE/EN → unknown).
+    """
+    result = _detect_lang_impl(text)
+    if result in ("de", "en"):
+        return result
+    return "unknown"
 
 
 def detect_comment_lang(text: str) -> str:
-    """Classify short comment text as 'de', 'en', or 'unknown'.
+    """Classify short comment text using langdetect.
 
-    Mirrors run_batch.mjs detectCommentLang() exactly.
+    Returns 'de', 'en', or 'unknown'.
     """
-    if not text:
+    if not text or len(text.strip()) < 2:
         return "unknown"
-    t = text.strip()
-    if len(t) < 2:
-        return "unknown"
-    if re.match(r"^[\W_\s]+$", t):
+
+    clean = re.sub(r"https?://\S+", "", text.strip())
+    if re.match(r"^[\W_\s]+$", clean):
         return "unknown"  # pure emoji / symbols
 
-    lower = t.lower()
-    clean = re.sub(r"https?://\S+", "", lower)
-    clean = re.sub(r"[@#]\w+", "", clean)
-
-    if re.search(r"[äöüß]", clean):
-        return "de"
-
-    words = [w for w in re.split(r"[\s\W]+", clean) if len(w) >= 2]
-    if len(words) < 1:
-        return "unknown"
-
-    g = sum(1 for w in words if w in GERMAN_WORDS)
-    e = sum(1 for w in words if w in ENGLISH_WORDS)
-
-    if g == 0 and e == 0:
-        return "unknown"
-    if g >= e * 1.2:
-        return "de"
-    if e > g * 1.2:
-        return "en"
-    return "de" if g > 0 else "en"
+    try:
+        lang = _detect_langdetect(clean)
+        if lang in ("de", "en"):
+            return lang
+    except Exception:
+        pass
+    return "unknown"
 
 
 def detect_region(bio_text: str) -> dict | None:
