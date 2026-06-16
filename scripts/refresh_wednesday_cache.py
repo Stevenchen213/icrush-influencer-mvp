@@ -13,6 +13,9 @@ import re
 import sys
 from pathlib import Path
 
+# Fix Unicode output on Windows GBK terminals
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from playwright.async_api import async_playwright
 
 # Add project root to path for icrush imports
