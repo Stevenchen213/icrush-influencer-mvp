@@ -98,19 +98,10 @@ def judge_from_caption(
             }
 
     if lang_status == "need-comments":
-        extra = (
-            f"；粉丝 {profile['fans']}<10K（如评论通过则置换组）"
-            if is_replace_by_fans
-            else ""
-        )
         return {
-            "verdict": "⚠️ 需人工核查",
-            "reason": (
-                f"caption {de_pct}%<{CAPTION_THRESHOLD}% "
-                f"但 bio 在 {profile['region']['region']} → 待 STAGE 3 调评论 API{extra}"
-            ),
+            "verdict": "🟡 复查",
+            "reason": f"bio 在 {profile['region']['region']} 但 caption {de_pct}%<{CAPTION_THRESHOLD}% → 人工复查",
             "regionAccurate": region_accurate,
-            "_pendingComments": True,
         }
 
     # Determine view status
