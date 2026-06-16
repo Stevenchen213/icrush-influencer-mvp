@@ -173,6 +173,7 @@ class Pipeline:
                     category = self._safe_get(v, "authorMeta.commerceUserInfo.category", "authorMeta", "commerceUserInfo", "category") or None
                     tt_profiles[name] = {
                         "name": name,
+                        "fullName": self._safe_get(v, "authorMeta.nickName", "authorMeta", "nickName") or name,
                         "fans": self._safe_get(v, "authorMeta.fans", "authorMeta", "fans") or 0,
                         "posts": self._safe_get(v, "authorMeta.video", "authorMeta", "video") or 0,
                         "bio": bio,
@@ -193,6 +194,7 @@ class Pipeline:
 
                     ig_profiles[p["username"]] = {
                         "name": p["username"],
+                        "fullName": p.get("fullName", ""),
                         "fans": p.get("followersCount", 0),
                         "posts": p.get("postsCount", 0),
                         "bio": p.get("biography", ""),
@@ -260,6 +262,7 @@ class Pipeline:
                     "reason": "IG profile 抓取无返回",
                 }
                 continue
+
             sc = short_circuit("IG", p)
             if sc["fail"]:
                 self.results[f"IG:{u}"] = {
@@ -351,26 +354,6 @@ class Pipeline:
             region_r = judge_wednesday_region(detail)
             gender_r = judge_gender(detail, p.get("fans", 0))
             female_str = f"{detail['gender']['female']}%" if detail.get("gender") else "无信息"
-
-            # Male creator check: Wednesday shows >80% male → likely male creator
-            male_pct = detail.get("gender", {}).get("male")
-            if male_pct is not None and male_pct > 80:
-                self.results[key] = {
-                    "platform": platform, "name": u,
-                    "fans": p["fans"], "posts": p["posts"],
-                    "regionAccurate": "是 (Wednesday)" if region_r["pass"] else "否 (Wednesday)",
-                    "avgViews": None,
-                    "genderFemale": detail["gender"]["female"],
-                    "commercialStats": None,
-                    "verdict": "❌ 否",
-                    "reason": f"男博主（Wednesday 男粉 {male_pct}%>80%）",
-                }
-                print(f"     ❌ 男博主: 男粉 {male_pct}%>80%")
-                if platform == "TT":
-                    tt_survivors.remove(u)
-                else:
-                    ig_survivors.remove(u)
-                continue
 
             wednesday_data[key] = {
                 "found": True,

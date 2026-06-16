@@ -10,7 +10,7 @@ from icrush.config import (
     VIEW_OK,
     VIEW_REPLACE,
 )
-from icrush.language import detect_male_creator
+from icrush.language import detect_male_by_name
 
 
 def short_circuit(platform: str, profile: dict) -> dict:
@@ -18,11 +18,8 @@ def short_circuit(platform: str, profile: dict) -> dict:
 
     Returns {'fail': bool, 'reason': str}.
     """
-    # Male creator check (hard rule)
-    male_reason = detect_male_creator(
-        bio=profile.get("bio", ""),
-        category=profile.get("category", ""),
-    )
+    # Male creator check — by name (hard rule)
+    male_reason = detect_male_by_name(profile.get("fullName", ""))
     if male_reason:
         return {"fail": True, "reason": male_reason}
 

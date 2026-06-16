@@ -140,3 +140,27 @@ CAT_LABELS: dict[str, str] = {
     "fashion": "服饰",
     "jewelry": "珠宝",
 }
+
+# === Male First Name Detection ===
+# Common German / European / Turkish male first names.
+# Case-insensitive matching against IG fullName first token.
+MALE_FIRST_NAMES: frozenset[str] = frozenset(
+    "alexander,andreas,benjamin,christian,daniel,david,dennis,dominik,elias,erik,"
+    "fabian,felix,florian,frank,gabriel,georg,hannes,hans,henrik,henry,jakob,jan,"
+    "jannik,jens,joel,johann,johannes,jonas,jonathan,julian,justin,kai,kevin,"
+    "konstantin,lars,leon,leonard,leopold,linus,lorenz,luca,lucas,lukas,manuel,"
+    "marc,marcel,marco,markus,martin,matthias,max,maximilian,michael,moritz,"
+    "niclas,nico,nicolas,niklas,nikolai,nils,noah,oliver,patrick,paul,peter,"
+    "philipp,phillip,ralf,raphael,rene,robert,robin,samuel,sebastian,simon,"
+    "stefan,thomas,tim,tobias,tom,uwe,valentin,vincent,wolfgang,yannick,"
+    "adam,andrew,anthony,brandon,brian,charles,chris,connor,derek,dylan,"
+    "edward,eric,ethan,george,harry,jack,james,jason,jayden,jeremy,jesse,"
+    "john,jordan,joseph,joshua,kyle,liam,logan,luke,mason,matthew,nathan,"
+    "nicholas,nick,owen,ryan,sam,tyler,william,zach,"
+    "ahmet,ali,arda,baran,berk,burak,can,cem,deniz,efe,emir,emre,"
+    "enes,eren,ferhat,furkan,hakan,hasan,huseyin,ibrahim,ismail,kadir,kaan,"
+    "kemal,kerem,mehmet,mert,murat,mustafa,omer,onur,orhan,osman,"
+    "selim,serdar,serkan,suleyman,tolga,ugur,umut,volkan,yasin,"
+    "yigit,yunus,yusuf"
+    .split(",")
+)

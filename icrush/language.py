@@ -8,6 +8,7 @@ from icrush.wordlists import (
     GERMAN_CITY_ABBR,
     GERMAN_CITY_LIST,
     GERMAN_WORDS,
+    MALE_FIRST_NAMES,
 )
 
 
@@ -139,25 +140,37 @@ def detect_occupation(bio: str, category: str | None) -> str | None:
     return None
 
 
-# ── Male creator detection ──────────────────────────────────────
+def detect_male_by_name(full_name: str = "") -> str | None:
+    """Check if the first token of a fullName matches known male first names.
 
-_MALE_CATEGORY_WORDS = [
-    "men's fashion", "männer", "herren", "menswear", "men's clothing",
-    "male model", "männermode", "herrenmode", "men's style", "mens fashion",
-    "male influencer", "men's lifestyle", "herrenbekleidung",
-]
-
-
-def detect_male_creator(bio: str = "", category: str = "") -> str | None:
-    """Check if a profile appears to be a male creator.
-
-    Returns a reason string if the profile is likely male, or None.
+    Returns a reason string if likely male, or None.
+    Couple names (e.g. 'Anna & Tom') are NOT rejected — only solo male names.
     """
-    text = f"{bio or ''} {category or ''}".lower()
+    if not full_name:
+        return None
 
-    for kw in _MALE_CATEGORY_WORDS:
-        if kw in text:
-            return f"男博主（category: {kw}）"
+    # Remove non-alpha characters, split into tokens
+    import re
+    tokens = re.split(r"[^a-zA-ZäöüÄÖÜß]+", full_name.lower().strip())
+
+    male_hits = [t for t in tokens if t in MALE_FIRST_NAMES]
+    female_candidates = [t for t in tokens if t.endswith("a") or t.endswith("e")]
+
+    if not male_hits:
+        return None
+
+    # If there's a female name present (e.g. "Anna & Tom"), treat as couple → pass
+    if "&" in full_name or "und" in full_name.lower():
+        return None
+
+    # Only one token and it's male → likely male
+    if len(tokens) == 1 and male_hits:
+        first = tokens[0]
+        return f"男博主（名字: {first}）"
+
+    # Multiple tokens, all identified names are male, no female indicators
+    if male_hits and not female_candidates:
+        return f"男博主（名字: {', '.join(male_hits)}）"
 
     return None
 
