@@ -106,7 +106,7 @@ echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 icrush/
   config.py      → 阈值常量
   wordlists.py   → 词典（德语/英语/城市/男名/品牌）
-  language.py    → 语言检测、地区检测、职业检测、性别检测、URL解析
+  language.py    → 语言检测（langdetect 库）、地区检测、职业检测、性别检测、URL解析
   judges.py      → 短路淘汰 + caption 判定
   wednesday.py   → 缓存读写 + 实时查询（Playwright）
   pipeline.py    → 三阶段编排
@@ -116,6 +116,18 @@ icrush/
 scripts/
   run_batch.py               → 主入口
   refresh_wednesday_cache.py  → 手动刷新缓存
+```
+
+## 语言检测
+
+- 使用 `langdetect` 库（Google 语言检测算法）
+- 土耳其语、法语等非 DE/EN 语言 → 映射为 unknown，不计入 caption 比例分母
+- 已修复：之前词表检测会把土耳其语（含 ü/ö）误判为德语
+
+## 依赖
+
+```
+httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
 ```
 
 ## 已知限制
