@@ -30,7 +30,9 @@ def detect_lang(text: str) -> str:
     clean = re.sub(r"[@#]\w+", "", clean)
 
     german_char_boost = 0
-    if re.search(r"[äöüß]", clean):
+    # Turkish uses ü/ö too — check for Turkish-specific chars first
+    is_turkish = bool(re.search(r"[çğışÇĞİŞ]", clean))
+    if not is_turkish and re.search(r"[äöüß]", clean):
         german_char_boost = 3
 
     words = [w for w in re.split(r"[\s\W]+", clean) if len(w) >= 2]
