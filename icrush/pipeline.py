@@ -32,6 +32,7 @@ from icrush.report import build_markdown_table, build_stats, save_report
 from icrush.wednesday import (
     judge_gender,
     judge_wednesday_region,
+    live_lookup,
     wednesday_lookup,
 )
 
@@ -67,7 +68,7 @@ class Pipeline:
         )
 
         # === STAGE 1.5: Wednesday ===
-        wednesday_data = self._stage1_5_wednesday(
+        wednesday_data = await self._stage1_5_wednesday(
             unique_tt, unique_ig, tt_profiles, ig_profiles,
             tt_survivors, ig_survivors,
         )
@@ -279,7 +280,7 @@ class Pipeline:
 
     # ── STAGE 1.5 ────────────────────────────────────────────────
 
-    def _stage1_5_wednesday(
+    async def _stage1_5_wednesday(
         self,
         unique_tt: list[str],
         unique_ig: list[str],
@@ -289,7 +290,8 @@ class Pipeline:
         ig_survivors: list[str],
     ) -> dict:
         """Query Wednesday cache for ALL users. For survivors: apply pass/fail.
-        For already short-circuited: only fill in gender/region data."""
+        For already short-circuited: only fill in gender/region data.
+        Cache misses → auto query Wednesday API live."""
         wednesday_data: dict = {}
 
         all_tt = list(unique_tt)
@@ -306,6 +308,8 @@ class Pipeline:
         total = len(all_users)
         print(f"\n=== STAGE 1.5: Wednesday 地区+性别查询（{total} 人，{surv_count} 存活 + {total - surv_count} 已淘汰）===")
 
+        # First pass: check cache
+        cache_misses: list[str] = []  # usernames not in cache
         for platform, u in all_users:
             p = tt_profiles.get(u) if platform == "TT" else ig_profiles.get(u)
             if p is None:
@@ -316,7 +320,31 @@ class Pipeline:
             detail = wednesday_lookup(u)
             if not detail["found"]:
                 if not is_short:
-                    print(f"  → {key}: ❌ 无缓存 → 走原流程")
+                    cache_misses.append(u)
+                continue
+
+        # Auto-query live for cache misses
+        if cache_misses:
+            print(f"   🔍 {len(cache_misses)} 人无缓存，自动查询 Wednesday API...")
+            await live_lookup(cache_misses)
+            # Re-read cache after live lookup updated it
+            import importlib
+            # force reload the module-level cache to pick up new data
+            wednesday_module = importlib.import_module("icrush.wednesday")
+            wednesday_module._cache = None  # type: ignore[attr-defined]
+
+        # Second pass: now all users should be in cache (or confirmed not found)
+        for platform, u in all_users:
+            p = tt_profiles.get(u) if platform == "TT" else ig_profiles.get(u)
+            if p is None:
+                continue
+            key = f"{platform}:{u}"
+            is_short = key in self.results and self.results[key].get("verdict") == "❌ 否"
+
+            detail = wednesday_lookup(u)
+            if not detail["found"]:
+                if not is_short:
+                    print(f"  → {key}: ❌ 无缓存（Wednesday 未收录）→ 走原流程")
                     wednesday_data[key] = {"found": False}
                 continue
 
