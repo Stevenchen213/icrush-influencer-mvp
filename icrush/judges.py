@@ -23,12 +23,6 @@ def short_circuit(platform: str, profile: dict) -> dict:
     if male_reason:
         return {"fail": True, "reason": male_reason}
 
-    # Occupation check
-    occ = profile.get("occupation")
-    if occ:
-        label = "律师" if occ == "Lawyer" else "艺术家"
-        return {"fail": True, "reason": f"职业={label}（直接 PASS）"}
-
     # Private account
     if profile.get("private"):
         return {"fail": True, "reason": "私密账户"}

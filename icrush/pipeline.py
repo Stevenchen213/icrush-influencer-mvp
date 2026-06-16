@@ -28,7 +28,7 @@ from icrush.judges import (
     judge_from_caption,
     short_circuit,
 )
-from icrush.language import detect_comment_lang, detect_lang, detect_occupation as _occ, detect_region, parse_url
+from icrush.language import detect_comment_lang, detect_lang, detect_region, parse_url
 from icrush.report import build_markdown_table, build_stats, save_report
 from icrush.wednesday import (
     judge_gender,
@@ -274,7 +274,6 @@ class Pipeline:
                         "category": category,
                         "private": self._safe_get(v, "authorMeta.privateAccount", "authorMeta", "privateAccount") or False,
                         "region": detect_region(bio),
-                        "occupation": None,  # filled below
                     }
             else:
                 for p in items:
@@ -298,13 +297,8 @@ class Pipeline:
                         "category": p.get("businessCategoryName"),
                         "private": p.get("private", False),
                         "region": region,
-                        "occupation": _occ(p.get("biography", ""), p.get("businessCategoryName")),
                         "latestPosts": p.get("latestPosts", []),
                     }
-
-        # Fill TT occupations
-        for name, p in tt_profiles.items():
-            p["occupation"] = _occ(p.get("bio", ""), p.get("category"))
 
         # Playwright fallback for IG users Apify missed
         missed_ig = [u for u in ig_users if u not in ig_profiles]
@@ -331,7 +325,6 @@ class Pipeline:
                         "category": fallback.get("businessCategoryName"),
                         "private": fallback.get("private", False),
                         "region": region,
-                        "occupation": _occ(fallback.get("biography", ""), fallback.get("businessCategoryName")),
                         "latestPosts": fallback.get("latestPosts", []),
                     }
                 else:
