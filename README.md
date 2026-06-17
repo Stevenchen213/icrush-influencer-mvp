@@ -87,6 +87,12 @@ $py = "C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe"
 # 从 stdin 单条跑
 echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 
+# 自动发现新达人（Phase 2）
+& $py scripts/discover.py --dry-run              # 仅搜索+筛选（0 views）
+& $py scripts/discover.py --run                  # 完整流程：搜索→筛选→pipeline
+& $py scripts/discover.py --run --keywords fashion,mode  # 指定关键词
+& $py scripts/discover.py --run --max-validate 20        # 限制候选人数
+
 # 手动刷新 Wednesday 缓存
 & $py scripts/refresh_wednesday_cache.py username1 username2
 ```
