@@ -48,3 +48,52 @@ CACHE_FILE: Path = DATA_DIR / "wednesday_cache.json"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# === Discovery ===
+DISCOVERY_KEYWORDS: list[str] = [
+    "fashion", "mode", "outfit", "schmuck", "beauty", "lifestyle",
+    "style", "jewelry", "accessories", "streetwear", "ootd",
+    "lookbook", "modisch", "beauty blogger", "fashion deutschland",
+    "mode blogger", "fashionista", "styleblogger", "outfitinspo",
+    "fashionblogger", "modetrend", "styling", "influencerfashion",
+]
+
+# Discovery pre-filter bounds (stricter than pipeline bounds)
+DISCOVERY_FAN_MIN: int = 10_000
+DISCOVERY_FAN_MAX_IG: int = 300_000
+DISCOVERY_FAN_MAX_TT: int = 500_000
+DISCOVERY_GENDER_FEMALE_MIN: float = 50.0
+
+# Wednesday search config
+WEDNESDAY_SEARCH_PER_PAGE: int = 50
+WEDNESDAY_SEARCH_MAX_PAGES: int = 3
+WEDNESDAY_LIST_ID: str = "389827"
+WEDNESDAY_VIEW_BUDGET: int = 3000
+WEDNESDAY_MIN_REMAINING: int = 100
+
+# IG Hashtag fallback
+ACTOR_IG_HASHTAG: str = "apify/instagram-hashtag-scraper"
+HASHTAG_KEYWORDS: list[str] = [
+    "fashiondeutschland", "modeblogger", "ootdgermany",
+    "fashionbloggerde", "streetstylegermany", "styleblogger_de",
+    "beautydeutschland", "schmuckliebe", "modetrend",
+    "germanfashionblogger", "fashiongermany", "outfitinspiration",
+    "berlinfashion", "munichstyle", "hamburgfashion",
+]
+
+# Exclusion & history files
+EXCLUSION_FILE: Path = DATA_DIR / "exclusion_list.json"
+HISTORY_FILE: Path = DATA_DIR / "discovery_history.json"
+AUTO_INPUT_FILE: Path = DATA_DIR / "input_auto.txt"
+
+# Airtable exclusion
+# Base: appmvJMccHqkAUwg8, Table: tbl8G3lCOugPLxNjr (5992 records)
+AIRTABLE_BASE_ID: str = "appmvJMccHqkAUwg8"
+AIRTABLE_TABLE_ID: str = "tbl8G3lCOugPLxNjr"
+AIRTABLE_TOKEN: str = os.environ.get("AIRTABLE_TOKEN", "")
+
+# 飞书 exclusion
+# Base: TgzJbUV0taC8VVsOyndcUp69nEh, Table: tbl0vl4DSF0ChSjg
+FEISHU_BASE_ID: str = "TgzJbUV0taC8VVsOyndcUp69nEh"
+FEISHU_TABLE_ID: str = "tbl0vl4DSF0ChSjg"
+FEISHU_TOKEN: str = os.environ.get("FEISHU_TOKEN", "")

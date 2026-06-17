@@ -282,3 +282,205 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
         print(f"   ⚠️ Wednesday 实时查询异常: {e}")
 
     return results
+
+
+async def search_keyword(
+    keyword: str,
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    audience_filters: list[dict] | None = None,
+) -> list[dict]:
+    """Search Wednesday for influencers matching a KEYWORD (not exact username).
+
+    Uses Playwright for auth (same as live_lookup), but calls /api/v1/matches
+    with keyword criteria. Returns audience data at ZERO view cost.
+
+    Args:
+        keyword: Search term (e.g. "fashion", "mode blogger")
+        page: Page number (1-indexed)
+        per_page: Results per page
+        audience_filters: Optional pre-filters (e.g. country=DE)
+
+    Returns:
+        List of influencer dicts, each containing:
+        id, name, username, followers, gender, topCountry, topCity,
+        instagrams, tiktoks, score, categories, tags, _keyword
+    """
+    if audience_filters is None:
+        audience_filters = []
+
+    results: list[dict] = []
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        print("   ⚠️ playwright 未安装，跳过 Wednesday 关键词搜索")
+        return results
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+
+            try:
+                # Login flow (same as live_lookup)
+                await page.goto("https://user.wednesday.app/login",
+                                wait_until="domcontentloaded", timeout=30000)
+                await asyncio.sleep(5)
+
+                if "hq.wednesday.app" not in page.url:
+                    try:
+                        await page.wait_for_selector(
+                            'input[placeholder*="email"], input[id*="ember"]',
+                            timeout=10000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+
+                    form_exists = await page.evaluate("""() => {
+                        const ins = document.querySelectorAll('input:not([type="hidden"])');
+                        return ins.length >= 2;
+                    }""")
+                    if not form_exists:
+                        return results
+                    await page.fill('input[placeholder*="email"]', WEDNESDAY_EMAIL)
+                    await page.fill('input[placeholder*="password"]', WEDNESDAY_PASSWORD)
+                    await page.click('button:has-text("Log in")')
+                    await asyncio.sleep(5)
+                    for _ in range(6):
+                        if "hq.wednesday.app" in page.url:
+                            break
+                        await asyncio.sleep(2)
+                    if "hq.wednesday.app" not in page.url:
+                        return results
+
+                # Extract token
+                token = await page.evaluate("""() => {
+                    const m = document.cookie.match(/wednesday-production-auth=([^;]+)/);
+                    if (!m) return null;
+                    return JSON.parse(decodeURIComponent(m[1])).authenticated.access_token;
+                }""")
+                if not token:
+                    return results
+
+                # Build search body with keyword criteria
+                offset = (page - 1) * per_page
+                body = {
+                    "current_list": "389827",
+                    "criterias": [{
+                        "value": keyword,
+                        "weight": 1,
+                        "field": "all",
+                        "type": "should",
+                    }],
+                    "filters": [],
+                    "audience_filters": audience_filters,
+                    "social_media_matching_operator": "or",
+                    "should_save": False,
+                    "track_hits_results": per_page,
+                    "score_model": "default",
+                }
+
+                # Execute search
+                result = await page.evaluate("""async ({body, per_page, offset, token}) => {
+                    const sr = await fetch(`https://facade.upfluence.co/api/v1/matches?page=1&per_page=${per_page}&offset=${offset}`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                        },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await sr.json();
+                    const infs = data.influencers || [];
+                    return infs.map(inf => ({
+                        id: inf.id || inf.influencer_id,
+                        name: inf.name,
+                        username: inf.username,
+                        followers: inf.followers || inf.followers_count,
+                        score: inf.score || inf._score,
+                        gender: inf.gender || inf.audience_gender || null,
+                        topCountry: inf.topCountry || inf.audience_top_country || null,
+                        topCity: inf.topCity || inf.audience_top_city || null,
+                        instagrams: inf.instagrams?.map(ig => ({username: ig.username, followers: ig.followers})) || [],
+                        tiktoks: inf.tiktoks?.map(tt => ({username: tt.username, followers: tt.followers})) || [],
+                        categories: inf.categories || [],
+                        tags: inf.tags || [],
+                        _keyword: null,
+                    }));
+                }""", {"body": body, "per_page": per_page, "offset": offset, "token": token})
+
+                # Tag each result with the keyword that found it
+                for r in result:
+                    r["_keyword"] = keyword
+
+                results = result
+
+            finally:
+                await browser.close()
+
+    except Exception as e:
+        print(f"   ⚠️ Wednesday 搜索异常 ({keyword}): {e}")
+
+    return results
+
+
+async def search_all_keywords(
+    keywords: list[str],
+    *,
+    per_page: int = 50,
+    max_pages: int = 3,
+    audience_filters: list[dict] | None = None,
+) -> list[dict]:
+    """Search Wednesday for multiple keywords and return deduplicated results.
+
+    Args:
+        keywords: List of search terms
+        per_page: Results per page per keyword
+        max_pages: Max pages per keyword
+        audience_filters: Optional audience pre-filters
+
+    Returns:
+        Deduplicated list of influencers, sorted by score descending.
+    """
+    seen_ids: set[int] = set()
+    seen_usernames: set[str] = set()
+    all_results: list[dict] = []
+
+    for kw in keywords:
+        sys.stdout.write(f"  🔍 \"{kw}\" ... ")
+        sys.stdout.flush()
+
+        keyword_results: list[dict] = []
+        for p in range(1, max_pages + 1):
+            page_results = await search_keyword(
+                kw, page=p, per_page=per_page,
+                audience_filters=audience_filters,
+            )
+            if not page_results:
+                break
+            keyword_results.extend(page_results)
+
+        new_count = 0
+        for inf in keyword_results:
+            uid = inf.get("id")
+            uname = (inf.get("username") or "").lower()
+            if uid and uid in seen_ids:
+                continue
+            if uname and uname in seen_usernames:
+                continue
+            if uid:
+                seen_ids.add(uid)
+            if uname:
+                seen_usernames.add(uname)
+            all_results.append(inf)
+            new_count += 1
+
+        print(f"{len(keyword_results)} 条 ({new_count} 新)")
+        await asyncio.sleep(0.5)  # Rate limit between keywords
+
+    # Sort by score descending
+    all_results.sort(key=lambda x: x.get("score", 0) or 0, reverse=True)
+    return all_results
