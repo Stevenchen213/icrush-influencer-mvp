@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入 Instagram / TikTok 主页链接，按硬性条件自动判定 ✅ 是 / ❌ 否 / 🟡 置换组 / 🟡 复查，省去手动核对时间。
 
-**当前版本**：v0.6 (2026-06-16)
+**当前版本**：v0.7 (2026-06-17)
 
 ## 硬性规则速览
 
@@ -39,12 +39,16 @@ icrush-influencer-mvp/
 ├── icrush/                     # 核心库
 │   ├── config.py               → 阈值常量
 │   ├── wordlists.py            → 词典（德语/英语/城市/男名）
-│   ├── language.py             → 语言检测(langdetect)、地区、职业、性别
+│   ├── language.py             → 语言检测(langdetect)、地区、性别
 │   ├── judges.py               → 短路淘汰 + caption 判定
-│   ├── wednesday.py            → 缓存读写 + 自动实时查询
-│   ├── pipeline.py             → 三阶段编排 + Playwright 兜底
+│   ├── wednesday.py            → 缓存读写 + 自动实时查询 + 关键词搜索
+│   ├── pipeline.py             → 四阶段编排 + Playwright 兜底
 │   ├── classifier.py           → 商单分类
 │   ├── gender.py               → 头像检测预留（需 API key）
+│   ├── dedup.py                → KOL 查重 API 客户端
+│   ├── discovery.py            → 自动发现引擎（Phase 2）
+│   ├── airtable.py             → Airtable 排除名单（fallback）
+│   ├── feishu.py               → 飞书排除名单（fallback）
 │   └── report.py               → Markdown 表格输出
 ├── scripts/                    # 入口脚本
 │   ├── run_batch.py            → 主流水线
@@ -99,6 +103,7 @@ echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 
 ## 流水线步骤
 
+0. **KOL 查重**（STAGE 0, 新增）：调用实习生部署的 Lambda API，已入库达人直接标记 🟡 已入库，跳过后续
 1. **解析 URL**（TT + IG 混排，去重保留顺序）
 2. **STAGE 1**：Apify 抓 profile metadata → 短路淘汰（按上述顺序）
 3. **STAGE 1.5**：Wednesday 查询（缓存优先，缓存未命中自动 Playwright 实时查询）
@@ -110,6 +115,7 @@ echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 
 | 条件 | 标记 |
 |------|------|
+| KOL 查重命中（库里已有） | 🟡 已入库 |
 | 全通过 + 有商单 | ✅ 是 |
 | 全通过 + 无商单 | 🟡 复查 |
 | 粉丝 <10K 或浏览 2K-4K | 🟡 置换组 |
@@ -144,6 +150,12 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
   - Apify 失败自动 Playwright 兜底
   - 表格新增 Caption 德语列
   - GBK 编码兼容修复
+- **v0.7** (2026-06-17)：**KOL 查重 API 集成**
+  - 新增 STAGE 0：调用实习生部署的 Lambda 查重 API
+  - 已入库达人 → 🟡 已入库，跳过后续 pipeline（省 Apify 费用）
+  - 自动发现系统也接入查重（搜索→筛选→查重→pipeline）
+  - 新增 `icrush/dedup.py`、`icrush/discovery.py`、`icrush/airtable.py`、`icrush/feishu.py`
+  - Airtable/飞书作为 fallback 查重层
 
 ## 协作
 

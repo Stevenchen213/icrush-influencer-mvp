@@ -10,6 +10,7 @@ load_dotenv()
 # === Apify ===
 TOKEN: str = os.environ["APIFY_TOKEN"]  # fail fast if missing
 SKIP_COMMENTS: bool = os.environ.get("SKIP_COMMENTS", "") == "1"
+SKIP_DEDUP: bool = os.environ.get("SKIP_DEDUP", "") == "1"
 
 # === Thresholds ===
 CAPTION_THRESHOLD: int = 25
@@ -97,3 +98,10 @@ AIRTABLE_TOKEN: str = os.environ.get("AIRTABLE_TOKEN", "")
 FEISHU_BASE_ID: str = "TgzJbUV0taC8VVsOyndcUp69nEh"
 FEISHU_TABLE_ID: str = "tbl0vl4DSF0ChSjg"
 FEISHU_TOKEN: str = os.environ.get("FEISHU_TOKEN", "")
+
+# === KOL 查重 API（实习生部署） ===
+DEDUP_API_URL: str = os.environ.get(
+    "DEDUP_API_URL",
+    "https://xhyngnhrplbfhogbxzw2jz2mpm0uucmp.lambda-url.eu-central-1.on.aws/",
+)
+DEDUP_API_TOKEN: str = os.environ.get("DEDUP_API_TOKEN", "")

@@ -20,9 +20,11 @@ from icrush.config import (
     FAN_REPLACE,
     POSTS_LIMIT,
     SKIP_COMMENTS,
+    SKIP_DEDUP,
     VIEW_OK,
     VIEW_REPLACE,
 )
+from icrush.dedup import check_dedup
 from icrush.judges import (
     finalize_with_comments,
     judge_from_caption,
@@ -59,6 +61,16 @@ class Pipeline:
         unique_tt = list(dict.fromkeys(p["username"] for p in input_order if p["platform"] == "TT"))
         unique_ig = list(dict.fromkeys(p["username"] for p in input_order if p["platform"] == "IG"))
         print(f"🔢 去重 TT={len(unique_tt)}, IG={len(unique_ig)}")
+
+        # === STAGE 0: KOL 查重（入库前检查，省 Apify 费用）===
+        if not SKIP_DEDUP:
+            dedup_tt, dedup_ig = await self._stage0_dedup(unique_tt, unique_ig)
+            if dedup_tt or dedup_ig:
+                print(f"🔍 查重拦截: TT {len(dedup_tt)} 人, IG {len(dedup_ig)} 人 → 跳过 pipeline")
+                unique_tt = [u for u in unique_tt if u not in dedup_tt]
+                unique_ig = [u for u in unique_ig if u not in dedup_ig]
+        else:
+            print("\n⚠️ SKIP_DEDUP=1，跳过 KOL 查重")
 
         # === STAGE 1: profile metadata ===
         tt_profiles, ig_profiles = await self._stage1_profiles(unique_tt, unique_ig)
@@ -218,6 +230,51 @@ class Pipeline:
         except Exception as e:
             print(f"     ⚠️ Playwright 兜底失败: {e}")
             return None
+
+    # ── STAGE 0: KOL 查重 ────────────────────────────────────────
+
+    async def _stage0_dedup(
+        self, tt_users: list[str], ig_users: list[str]
+    ) -> tuple[set[str], set[str]]:
+        """Check KOL 查重 API for all users. Returns sets of usernames to skip."""
+        dup_tt: set[str] = set()
+        dup_ig: set[str] = set()
+
+        all_users = [(u, "TT", "TikTok") for u in tt_users] + \
+                    [(u, "IG", "Instagram") for u in ig_users]
+
+        if not all_users:
+            return dup_tt, dup_ig
+
+        print(f"\n=== STAGE 0: KOL 查重（{len(all_users)} 人）===")
+
+        for username, platform, api_platform in all_users:
+            sys.stdout.write(f"  → {username} ... ")
+            sys.stdout.flush()
+            result = await check_dedup(username, api_platform)
+            if result["is_duplicate"]:
+                print(f"🚫 重复 → {result['summary']}")
+                if platform == "TT":
+                    dup_tt.add(username)
+                else:
+                    dup_ig.add(username)
+                self.results[f"{platform}:{username}"] = {
+                    "platform": platform, "name": username,
+                    "fans": None, "posts": None,
+                    "regionAccurate": "-", "avgViews": None,
+                    "genderFemale": None, "commercialStats": None,
+                    "verdict": "🟡 已入库",
+                    "reason": f"KOL查重: {result['summary']}",
+                }
+            elif result.get("error"):
+                print(f"⚠️ {result['error']} → 放行")
+            else:
+                print("✅ 不重复")
+
+        dup_total = len(dup_tt) + len(dup_ig)
+        if dup_total:
+            print(f"   📋 查重拦截 {dup_total} 人（已入库），跳过后续 pipeline")
+        return dup_tt, dup_ig
 
     # ── STAGE 1 ──────────────────────────────────────────────────
 

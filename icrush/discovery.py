@@ -24,6 +24,7 @@ from icrush.config import (
     WEDNESDAY_MIN_REMAINING,
     WEDNESDAY_VIEW_BUDGET,
 )
+from icrush.dedup import check_dedup
 from icrush.feishu import check_feishu
 from icrush.language import detect_male_by_name
 from icrush.wednesday import (
@@ -258,32 +259,61 @@ class DiscoveryEngine:
         """Feed discovered candidates into the vetting pipeline."""
         from icrush.pipeline import Pipeline
 
-        # Check Airtable + 飞书 for final dedup before pipeline
-        print(f"\n🔗 最终查重（Airtable + 飞书）...")
+        # Dedup check: KOL 查重 API (primary) → Airtable/飞书 (fallback)
+        print(f"\n🔗 最终查重（KOL API + Airtable + 飞书）...")
         final_candidates = []
+        dup_count = 0
         for inf in self.filtered:
             username = (inf.get("username") or "").lower()
             ig_handles = inf.get("_ig_handles") or []
 
-            # Check all IG handles against Airtable and 飞书
             excluded = False
             for ig in ig_handles:
                 uname = ig.get("username") if isinstance(ig, dict) else str(ig)
+
+                # ① KOL 查重 API (primary)
+                dedup = await check_dedup(uname, "Instagram")
+                if dedup["is_duplicate"]:
+                    print(f"   🚫 {uname}: KOL 查重命中 → {dedup['summary']}")
+                    excluded = True
+                    dup_count += 1
+                    break
+                elif dedup.get("error"):
+                    # API failed → try fallbacks
+                    print(f"   ⚠️ {uname}: KOL API 异常({dedup['error']}) → 降级到 Airtable/飞书")
+
+                # ② Airtable (fallback)
                 if await check_airtable(uname):
                     print(f"   🚫 {uname}: Airtable 查重命中")
                     excluded = True
+                    dup_count += 1
                     break
+
+                # ③ 飞书 (fallback)
                 if await check_feishu(uname):
                     print(f"   🚫 {uname}: 飞书查重命中")
                     excluded = True
+                    dup_count += 1
                     break
+
             if not excluded and username:
-                if await check_airtable(username):
-                    print(f"   🚫 {username}: Airtable 查重命中")
+                dedup = await check_dedup(username, "Instagram")
+                if dedup["is_duplicate"]:
+                    print(f"   🚫 {username}: KOL 查重命中 → {dedup['summary']}")
                     excluded = True
-                elif await check_feishu(username):
-                    print(f"   🚫 {username}: 飞书查重命中")
-                    excluded = True
+                    dup_count += 1
+                elif not dedup.get("error"):
+                    pass  # API ok, no dup
+                else:
+                    # Fallback
+                    if await check_airtable(username):
+                        print(f"   🚫 {username}: Airtable 查重命中")
+                        excluded = True
+                        dup_count += 1
+                    elif await check_feishu(username):
+                        print(f"   🚫 {username}: 飞书查重命中")
+                        excluded = True
+                        dup_count += 1
 
             if not excluded:
                 final_candidates.append(inf)
@@ -291,7 +321,7 @@ class DiscoveryEngine:
                 self.exclusion_usernames.add(username)
 
         self.filtered = final_candidates
-        print(f"   ✅ 最终 {len(self.filtered)} 人通过所有检查")
+        print(f"   ✅ 最终 {len(self.filtered)} 人通过（拦截 {dup_count} 重复）")
 
         if not self.filtered:
             print("\n⚠️ 没有候选人需要 pipeline 验证")

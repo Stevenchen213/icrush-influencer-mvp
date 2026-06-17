@@ -69,6 +69,12 @@ def detect_comment_lang(text: str) -> str:
     return "unknown"
 
 
+def _match_boundary(word: str, text: str) -> bool:
+    """Match word with word-boundary awareness (e.g. 'essen' won't match 'accessories')."""
+    import re
+    return bool(re.search(r'(?<![a-z])' + re.escape(word) + r'(?![a-z])', text))
+
+
 def detect_region(bio_text: str) -> dict | None:
     """Check a bio string for a German or Austrian city.
 

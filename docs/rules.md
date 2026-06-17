@@ -1,13 +1,18 @@
-# ICRUSH Influencer Vetting Pipeline — v0.6 Rules
+# ICRUSH Influencer Vetting Pipeline — v0.7 Rules
 
-> 最后更新: 2026-06-16
+> 最后更新: 2026-06-17
 
 ## 完整判定流程
 
-### STAGE 0：解析 URL
+### STAGE 0：KOL 查重（新增）
+调用实习生部署的 Lambda API (`POST /`)，传入 `{account, platform}`:
+- 返回 `summary` 包含 "不重复" → 放行，继续 pipeline
+- 返回 `summary` 包含 "有重复" → 🟡 已入库，跳过后续（不消耗 Apify 费用）
+
+### STAGE 0.5：解析 URL
 提取 IG / TT 用户名，去重。
 
-### STAGE 0.5：Resilience
+### STAGE 0.6：Resilience
 - Apify IG profile 抓取失败 → 自动 Playwright 兜底（headless 浏览器解析 meta 标签）
 - Wednesday 缓存未命中 → 自动 Playwright 实时查询 API
 - 任何外部服务挂了都不阻塞主流程
