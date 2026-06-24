@@ -20,6 +20,7 @@
 import { chromium } from "playwright";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 
 const DATA_DIR = "C:\\Users\\yaxua\\icrush-influencer-mvp\\data";
 const SESSION_LOG = path.join(DATA_DIR, "session_log.json");
@@ -203,12 +204,15 @@ async function main() {
   const args = process.argv.slice(2);
   let cfg = { ...SAFE };
   let seeds = [];
+  let autoPipeline = false;
 
   let i = 0;
   while (i < args.length) {
     if (args[i] === "--fast") {
       cfg = { ...FAST };
       console.log("[!] FAST mode — safety delays disabled");
+    } else if (args[i] === "--auto-pipeline") {
+      autoPipeline = true;
     } else if (args[i] === "--max-seeds" && i + 1 < args.length) {
       cfg.maxSeedsPerSession = parseInt(args[i + 1]);
       i++;
@@ -219,7 +223,12 @@ async function main() {
   }
 
   if (seeds.length === 0) {
-    console.log("Usage: node fetch_similar_accounts_v3.mjs [--fast] [--max-seeds N] <username1> [username2 ...]");
+    console.log("Usage: node fetch_similar_accounts_v3.mjs [--fast] [--auto-pipeline] [--max-seeds N] <username1> [username2 ...]");
+    console.log("");
+    console.log("Options:");
+    console.log("  --fast            Skip safety delays (debug only)");
+    console.log("  --auto-pipeline   Auto-run pipeline after extraction");
+    console.log("  --max-seeds N     Override max seeds per session");
     console.log("");
     console.log("Safety defaults:");
     console.log(`  Seed delay: ${SAFE.seedDelayMin / 1000}-${SAFE.seedDelayMax / 1000}s random`);
@@ -298,7 +307,39 @@ async function main() {
   // Session stats
   logSession(seeds.length, total);
 
-  console.log(`\nNext step: python scripts/run_batch.py data/input_similar_combined.txt`);
+  if (total === 0) {
+    console.log("\n⚠️  0 accounts found — skipping pipeline");
+    return;
+  }
+
+  const combinedPath = path.join(DATA_DIR, "input_similar_combined.txt");
+
+  if (autoPipeline) {
+    console.log(`\n${"=".repeat(50)}`);
+    console.log("Auto-pipeline: feeding into run_batch.py...");
+    console.log(`${"=".repeat(50)}`);
+
+    const pythonPath = "C:\\Users\\yaxua\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
+    const proc = spawn(pythonPath, ["scripts/run_batch.py", combinedPath], {
+      cwd: "C:\\Users\\yaxua\\icrush-influencer-mvp",
+      stdio: "inherit",
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    });
+
+    await new Promise((resolve, reject) => {
+      proc.on("close", (code) => {
+        if (code === 0) console.log("\n✅ Pipeline complete!");
+        else console.log(`\n⚠️  Pipeline exited with code ${code}`);
+        resolve();
+      });
+      proc.on("error", (err) => {
+        console.error(`\n❌ Failed to start pipeline: ${err.message}`);
+        resolve();
+      });
+    });
+  } else {
+    console.log(`\nNext step: python scripts/run_batch.py ${combinedPath}`);
+  }
 }
 
 main().catch(e => {

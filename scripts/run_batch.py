@@ -25,18 +25,12 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="ICRUSH influencer batch vetting pipeline")
     parser.add_argument("input", nargs="?", default="-",
                         help="Input file path or '-' for stdin")
-    parser.add_argument("--skip-comments", action="store_true",
-                        help="Skip STAGE 3 comment scraping")
     args = parser.parse_args()
 
     if args.input == "-":
         text = sys.stdin.read()
     else:
         text = Path(args.input).read_text(encoding="utf-8")
-
-    if args.skip_comments:
-        import icrush.config
-        icrush.config.SKIP_COMMENTS = True
 
     client = ApifyClient()
     try:

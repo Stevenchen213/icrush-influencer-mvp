@@ -48,27 +48,6 @@ def detect_lang(text: str) -> str:
     return "unknown"
 
 
-def detect_comment_lang(text: str) -> str:
-    """Classify short comment text using langdetect.
-
-    Returns 'de', 'en', or 'unknown'.
-    """
-    if not text or len(text.strip()) < 2:
-        return "unknown"
-
-    clean = re.sub(r"https?://\S+", "", text.strip())
-    if re.match(r"^[\W_\s]+$", clean):
-        return "unknown"  # pure emoji / symbols
-
-    try:
-        lang = _detect_langdetect(clean)
-        if lang in ("de", "en"):
-            return lang
-    except Exception:
-        pass
-    return "unknown"
-
-
 def _match_boundary(word: str, text: str) -> bool:
     """Match word with word-boundary awareness (e.g. 'essen' won't match 'accessories')."""
     import re

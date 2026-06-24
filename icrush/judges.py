@@ -2,7 +2,6 @@
 
 from icrush.config import (
     CAPTION_THRESHOLD,
-    COMMENT_THRESHOLD,
     FAN_MAX,
     FAN_MIN,
     FAN_REPLACE,
@@ -132,59 +131,3 @@ def judge_from_caption(
         }
 
     return {"verdict": "✅ 是", "reason": "-", "regionAccurate": region_accurate}
-
-
-def finalize_with_comments(
-    profile: dict, avg_views: int, de_pct_comments: int | None
-) -> dict:
-    """Final verdict after STAGE 3 comment analysis.
-
-    Returns a dict suitable for merging into the results entry.
-    """
-    if de_pct_comments is None:
-        return {
-            "verdict": "⚠️ 需人工核查",
-            "reason": "评论数据不足（de+en 评论太少无法判定）",
-            "regionAccurate": "是 (评论)",
-        }
-
-    if de_pct_comments < COMMENT_THRESHOLD:
-        return {
-            "verdict": "❌ 否",
-            "reason": f"② 评论 {de_pct_comments}%<{COMMENT_THRESHOLD}%",
-            "regionAccurate": "是 (评论)",
-        }
-
-    is_replace_by_fans = profile.get("fans", 0) < FAN_REPLACE
-
-    if avg_views >= VIEW_OK:
-        view_status = "pass"
-    elif avg_views >= VIEW_REPLACE:
-        view_status = "replace"
-    else:
-        view_status = "fail"
-
-    if view_status == "fail":
-        return {
-            "verdict": "❌ 否",
-            "reason": f"② 评论 {de_pct_comments}% 通过 但近 3 月平均浏览 {avg_views:,}<{VIEW_REPLACE}",
-            "regionAccurate": "是 (评论)",
-        }
-
-    if is_replace_by_fans or view_status == "replace":
-        rs: list[str] = []
-        if is_replace_by_fans:
-            rs.append(f"粉丝 {profile['fans']}<10K")
-        if view_status == "replace":
-            rs.append(f"平均浏览 {avg_views:,} 在 2000-4000")
-        return {
-            "verdict": "🟡 置换组",
-            "reason": f"② 评论 {de_pct_comments}% 通过；{'；'.join(rs)}",
-            "regionAccurate": "是 (评论)",
-        }
-
-    return {
-        "verdict": "✅ 是",
-        "reason": "-",
-        "regionAccurate": "是 (评论)",
-    }

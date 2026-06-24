@@ -48,9 +48,12 @@ node scripts/fetch_similar_accounts_v3.mjs jxlia.albrecht emmaleinswelt
 
 ### 喂入 Pipeline
 
+### 一键全自动
+
 ```bash
-# 提取完成后直接跑筛选
-python scripts/run_batch.py data/input_similar_combined.txt
+# 提取 + 筛选一条命令搞定
+node scripts/fetch_similar_accounts_v3.mjs --auto-pipeline seed1 seed2 seed3
+# 自动输出 results/ 报告
 ```
 
 ### 调试模式

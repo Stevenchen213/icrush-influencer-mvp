@@ -9,14 +9,11 @@ load_dotenv()
 
 # === Apify ===
 TOKEN: str = os.environ["APIFY_TOKEN"]  # fail fast if missing
-SKIP_COMMENTS: bool = os.environ.get("SKIP_COMMENTS", "") == "1"
 SKIP_DEDUP: bool = os.environ.get("SKIP_DEDUP", "") == "1"
 
 # === Thresholds ===
 CAPTION_THRESHOLD: int = 25
-COMMENT_THRESHOLD: int = 60
 POSTS_LIMIT: int = 20
-COMMENTS_PER_POST: int = 10
 POSTS_MIN: int = 200
 FAN_MIN: int = 1_000
 FAN_MAX: dict[str, int] = {"TT": 500_000, "IG": 300_000}
@@ -38,8 +35,6 @@ WEDNESDAY_COUNTRY_MIN: float = 35.0
 ACTOR_TT_PROFILE: str = "clockworks/tiktok-profile-scraper"
 ACTOR_IG_PROFILE: str = "apify/instagram-profile-scraper"
 ACTOR_IG_POSTS: str = "apify/instagram-post-scraper"
-ACTOR_TT_COMMENTS: str = "thescrapelab/tiktok-comments-scraper"
-ACTOR_IG_COMMENTS: str = "apify/instagram-comment-scraper"
 
 # === Paths ===
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent

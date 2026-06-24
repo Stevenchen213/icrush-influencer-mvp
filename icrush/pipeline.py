@@ -1,4 +1,4 @@
-"""Main pipeline orchestrator — STAGE 1 → 1.5 → 2 → 3 → report."""
+"""Main pipeline orchestrator — STAGE 1 → 1.5 → 2 → report."""
 
 import asyncio
 import json
@@ -10,27 +10,22 @@ from pathlib import Path
 from icrush.apify import ApifyClient
 from icrush.classifier import analyze_commercial
 from icrush.config import (
-    ACTOR_IG_COMMENTS,
     ACTOR_IG_POSTS,
     ACTOR_IG_PROFILE,
-    ACTOR_TT_COMMENTS,
     ACTOR_TT_PROFILE,
-    COMMENTS_PER_POST,
     DATA_DIR,
     FAN_REPLACE,
     POSTS_LIMIT,
-    SKIP_COMMENTS,
     SKIP_DEDUP,
     VIEW_OK,
     VIEW_REPLACE,
 )
 from icrush.dedup import check_dedup
 from icrush.judges import (
-    finalize_with_comments,
     judge_from_caption,
     short_circuit,
 )
-from icrush.language import detect_comment_lang, detect_lang, detect_region, parse_url
+from icrush.language import detect_lang, detect_region, parse_url
 from icrush.report import build_markdown_table, build_stats, save_report
 from icrush.wednesday import (
     judge_gender,
@@ -91,9 +86,6 @@ class Pipeline:
             tt_survivors, ig_survivors, tt_profiles, ig_profiles, wednesday_data
         )
 
-        # === STAGE 3: comments ===
-        await self._stage3_comments(tt_profiles, ig_profiles)
-
         # === Commercial review rule ===
         for key, r in self.results.items():
             if r.get("verdict") == "✅ 是" and r.get("commercialStats") and r["commercialStats"]["total"] == 0:
@@ -112,7 +104,6 @@ class Pipeline:
         total_usd = await self.client.report_cost()
         survivors_tt = len(tt_survivors)
         survivors_ig = len(ig_survivors)
-        warn_count = sum(1 for r in self.results.values() if r.get("_pendingComments"))
 
         filepath = save_report(
             table=table,
@@ -122,7 +113,7 @@ class Pipeline:
             unique_ig=len(unique_ig),
             survivors_tt=survivors_tt,
             survivors_ig=survivors_ig,
-            warn_count=warn_count,
+            warn_count=0,
             total_usd=total_usd,
         )
         print(f"\n✓ 存档到 {filepath}")
@@ -674,7 +665,7 @@ class Pipeline:
 
             recent = [x for x in posts if x["createTime"] and
                       datetime.fromisoformat(x["createTime"].replace("Z", "+00:00")) > three_months_ago]
-            avg_views = round(sum(x["playCount"] for x in recent) / len(recent)) if recent else 0
+            avg_views = round(sum(x["playCount"] for x in posts) / len(posts)) if posts else 0
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
             commercial_stats = analyze_commercial(posts, "TT", three_months_ago)
@@ -744,8 +735,12 @@ class Pipeline:
                 and x.get("timestamp")
                 and datetime.fromisoformat(x["timestamp"].replace("Z", "+00:00")) > three_months_ago
             ]
-            if recent_videos:
-                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in recent_videos]
+            videos = [
+                x for x in posts
+                if (x.get("type") == "Video" or (x.get("videoPlayCount") and x.get("videoPlayCount", 0) > 0))
+            ]
+            if videos:
+                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in videos]
                 avg_views = round(sum(views_list) / len(views_list))
             else:
                 avg_views = 0
@@ -806,132 +801,5 @@ class Pipeline:
                 "urls": [x.get("url") for x in posts if x.get("url")],
             }
 
-    # ── STAGE 3 ──────────────────────────────────────────────────
-
-    async def _stage3_comments(
-        self, tt_profiles: dict, ig_profiles: dict
-    ) -> None:
-        """Comment scraping for ⚠️ users."""
-        warn_list = [k for k, r in self.results.items() if r.get("_pendingComments")]
-
-        if SKIP_COMMENTS:
-            for k in warn_list:
-                self.results[k]["verdict"] = "⚠️ 需人工核查"
-                self.results[k]["reason"] = "跳过评论检查（需人工判定地区）"
-            return
-
-        if not warn_list:
-            return
-
-        print(f"\n=== STAGE 3: ⚠️ 评论检查（{len(warn_list)} 人）===")
-
-        tt_warn = [k[3:] for k in warn_list if k.startswith("TT:")]
-        ig_warn = [k[3:] for k in warn_list if k.startswith("IG:")]
-
-        tasks: list[asyncio.Task] = []
-
-        if tt_warn:
-            urls = []
-            for u in tt_warn:
-                urls.extend((self.survivor_meta.get(f"TT:{u}", {}).get("urls") or [])[:POSTS_LIMIT])
-            print(f"  → TT thescrapelab {len(urls)} videos × {COMMENTS_PER_POST} 评论 ({len(tt_warn)} 人)")
-            tasks.append(asyncio.create_task(
-                self._start_and_fetch(ACTOR_TT_COMMENTS, {
-                    "videoUrls": urls,
-                    "maxCommentsPerVideo": COMMENTS_PER_POST,
-                    "includeReplies": False,
-                }, kind="tt-comments")
-            ))
-
-        if ig_warn:
-            urls = []
-            for u in ig_warn:
-                urls.extend((self.survivor_meta.get(f"IG:{u}", {}).get("urls") or [])[:POSTS_LIMIT])
-            print(f"  → IG instagram-comment-scraper {len(urls)} posts × {COMMENTS_PER_POST} 评论 ({len(ig_warn)} 人)")
-            tasks.append(asyncio.create_task(
-                self._start_and_fetch(ACTOR_IG_COMMENTS, {
-                    "directUrls": urls,
-                    "resultsLimit": COMMENTS_PER_POST,
-                }, kind="ig-comments")
-            ))
-
-        results_list = await asyncio.gather(*tasks)
-
-        # Analyze comments per user
-        tt_comments_by_user: dict[str, dict] = {}
-        ig_comments_by_user: dict[str, dict] = {}
-
-        for kind, items in results_list:
-            if kind == "tt-comments":
-                for c in items:
-                    if not c.get("video_url") or not c.get("text"):
-                        continue
-                    m = re.search(r"@([^/]+)/", c["video_url"])
-                    if not m:
-                        continue
-                    user = m.group(1)
-                    if user not in tt_warn:
-                        continue
-                    s = tt_comments_by_user.setdefault(user, {"de": 0, "en": 0, "total": 0})
-                    s["total"] += 1
-                    lang = c.get("language") or detect_comment_lang(c["text"])
-                    if lang == "de":
-                        s["de"] += 1
-                    elif lang == "en":
-                        s["en"] += 1
-            else:
-                for c in items:
-                    if not c.get("postUrl") or not c.get("text"):
-                        continue
-                    # Map postUrl → ownerUsername via ig_posts (would need ig_posts loaded)
-                    # For now, skip mapping as it requires the full IG posts data
-                    # Fallback: use a URL-based heuristic
-                    user = None
-                    for u in ig_warn:
-                        meta_urls = self.survivor_meta.get(f"IG:{u}", {}).get("urls") or []
-                        if c["postUrl"] in meta_urls:
-                            user = u
-                            break
-                    if not user:
-                        continue
-                    s = ig_comments_by_user.setdefault(user, {"de": 0, "en": 0, "total": 0})
-                    s["total"] += 1
-                    lang = detect_comment_lang(c["text"])
-                    if lang == "de":
-                        s["de"] += 1
-                    elif lang == "en":
-                        s["en"] += 1
-
-        # Apply comment-based verdicts
-        for k in warn_list:
-            platform = k[:2]
-            user = k[3:]
-            profile = (tt_profiles if platform == "TT" else ig_profiles).get(user, {})
-            stats = tt_comments_by_user.get(user) if platform == "TT" else ig_comments_by_user.get(user)
-            meta = self.survivor_meta.get(k, {})
-
-            if stats and (stats["de"] + stats["en"]) > 0:
-                de_pct = round(stats["de"] * 100 / (stats["de"] + stats["en"]))
-            else:
-                de_pct = None
-
-            j = finalize_with_comments(profile, meta.get("avgViews", 0), de_pct)
-            existing = self.results[k]
-            self.results[k] = {
-                "platform": platform, "name": user,
-                "fans": profile.get("fans"), "posts": profile.get("posts"),
-                **j,
-                "avgViews": meta.get("avgViews", 0),
-                "genderFemale": existing.get("genderFemale"),
-                "commercialStats": existing.get("commercialStats"),
-            }
-
-            stat_summary = (
-                f"(de={stats['de']}, en={stats['en']}, total={stats['total']})"
-                if stats else "(无评论数据)"
-            )
-            print(f"   {k}: 评论 {de_pct if de_pct is not None else '?'}% {stat_summary} → {j['verdict']}")
-
-        # Clean up _pendingComments markers
-        for k in self.results:
-            self.results[k].pop("_pendingComments", None)
+    # STAGE 3 removed — comment scraping deprecated.
+    # caption < 25% + bio DE → 🟡 复查 (manual review), no auto comment check.
