@@ -9,6 +9,10 @@ data/*
 *.json
 !package.json
 !package-lock.json
+!.claude/**/*.json
+
+# 结果输出
+results/
 
 # 截图 / 临时文件
 *.png

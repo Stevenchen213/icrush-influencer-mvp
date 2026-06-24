@@ -78,64 +78,9 @@
 - 覆盖语言：German + English + Turkish
 - 情侣名（含 & / und）→ 不拒，按女博主处理
 
-## 偏好筛选（非硬性）
+## 备注
 
-- 白人年轻美女达人
-- 时尚/美妆/生活方式类，不要宠物/DIY/品牌官号
-- 要有口播商单（不只是图文 #ad）
-- IG 为主，TT 也可以
-
-## Anti-targets
-
-- 民族服饰类 / 游戏/食物/风景/ASMR/亲子类
-- 奢侈品炫富类 / 首饰品牌创始人（竞品）
-- 艺术家/律师（已移除，不再卡身份）
-
-## 运行方式
-
-```bash
-# Python 路径（不用 Windows Store 版）
-$py = "C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe"
-
-# 从文件批量跑
-& $py scripts/run_batch.py data/input.txt
-
-# 从 stdin 单条跑
-echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
-```
-
-## 代码结构
-
-```
-icrush/
-  config.py      → 阈值常量
-  wordlists.py   → 词典（德语/英语/城市/男名/品牌）
-  language.py    → 语言检测（langdetect 库）、地区检测、职业检测、性别检测、URL解析
-  judges.py      → 短路淘汰 + caption 判定
-  wednesday.py   → 缓存读写 + 实时查询（Playwright）
-  pipeline.py    → 三阶段编排
-  classifier.py  → 商单分类
-  report.py      → Markdown 表格输出
-
-scripts/
-  run_batch.py               → 主入口
-  refresh_wednesday_cache.py  → 手动刷新缓存
-```
-
-## 语言检测
-
-- 使用 `langdetect` 库（Google 语言检测算法）
-- 土耳其语、法语等非 DE/EN 语言 → 映射为 unknown，不计入 caption 比例分母
-- 已修复：之前词表检测会把土耳其语（含 ü/ö）误判为德语
-
-## 依赖
-
-```
-httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
-```
-
-## 已知限制
-
-- Wednesday 月度 3000 views 配额（2026-06-16 已耗尽，7月1日重置）
-- GitHub 从中国推送不稳（需 VPN）
-- Windows 终端需 UTF-8 编码
+- **偏好筛选 / Anti-targets**: 见 `AGENT.md`「重要约定」章节，非硬性规则，人工选人时参考
+- **运行方式 / 依赖 / 语言检测**: 见项目 `README.md`
+- **版本演进**: 见 `README.md`「版本演进」
+- **品牌官方号过滤**: 当前无代码实现，需人肉判定；欢迎补充品牌名单到 `wordlists.py`

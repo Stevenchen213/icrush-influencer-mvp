@@ -12,9 +12,10 @@ ICRUSH 国内办公室自动化达人调研流水线 —— 输入 Instagram / T
 | 2 | 私密账户 | → ❌ |
 | 3 | 帖数 | < 200（IG reel 占比 >50% 可豁免到 150） |
 | 4 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
+| 5 | Caption 德语 | ≥ 25%（bio DE 时），不足则走评论 ≥ 60% |
 | 6 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
 | 7 | 浏览量 | ≥4000 通过 / 2000-3999 置换 / <2000 否 |
-| 8 | 女粉占比 | 男粉 ≤50%（>100K 放宽到 ≤65%） |
+| 8 | 男粉占比 | ≤50%（>100K 放宽到 ≤65%） |
 
 完整规则：**[docs/rules.md](docs/rules.md)**
 
@@ -95,6 +96,7 @@ echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 & $py scripts/discover.py --dry-run              # 仅搜索+筛选（0 views）
 & $py scripts/discover.py --run                  # 完整流程：搜索→筛选→pipeline
 & $py scripts/discover.py --run --keywords fashion,mode  # 指定关键词
+& $py scripts/discover.py --method suggested --seeds https://www.instagram.com/oksana_vibe.de/ --dry-run  # DrissionPage 推荐发现（新增）
 & $py scripts/discover.py --run --max-validate 20        # 限制候选人数
 
 # 手动刷新 Wednesday 缓存
@@ -125,7 +127,7 @@ echo "https://www.instagram.com/x/" | & $py scripts/run_batch.py -
 ## 依赖
 
 ```
-httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
+httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0, drissionpage>=4.1
 ```
 
 ## 安全

@@ -1,15 +1,25 @@
-﻿# ICRUSH AGENT.md
+# ICRUSH AGENT.md
 
 > 项目级上下文文件，供 AI agent（Codex / Claude Code）接力时对齐状态。
-> 每次切换工具前更新本节，让下一个 agent 直接进入状态。
+> doc 职责划分: AGENT.md=AI上下文 / README.md=人类概览 / docs/rules.md=完整规则
 
 ---
 
-## 项目概览
+## 项目概况
 
-**ICRUSH** — 德国/奥地利 KOL 自动化筛选管线。输入 Instagram / TikTok 主页链接，按硬性条件自动判定 ✓ 通过 / ✗ 淘汰 / 🔄 置换组 / 🔍 复查，输出 Markdown 报表。
+**ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+当前版本：**v0.7**
+GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
-当前版本：v0.7（2026-06-17）
+---
+
+## 用户角色
+
+- **ICRUSH 实习生**，找德国 IG/TT 珠宝时尚达人
+- 使用 **飞书** 做共享查重表
+- 使用 **Wednesday (Upfluence)** 看受众画像，月配额 3000 views
+- **预算敏感**：Apify 月配额已耗尽，需充值
+- Python 路径：`C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe`
 
 ---
 
@@ -18,97 +28,105 @@
 | 层 | 选型 |
 |---|------|
 | 语言 | Python >=3.11 |
-| 依赖 | httpx, langdetect, playwright, python-dotenv |
-| 数据源 | Apify Actors（IG/TT profile + posts + comments）、Wednesday API |
-| 容灾 | Apify 失败 -> Playwright headless 兜底；Wednesday 缓存未命中 -> Playwright 实时查询 |
-| 结果 | Markdown 表格输出到 results/ |
+| 依赖 | httpx, langdetect, playwright, python-dotenv, drissionpage |
+| 数据源 | Apify Actors、Wednesday API、Playwright stealth、DrissionPage |
+| 容灾 | Apify 失败 -> Playwright headless 兜底 |
+| 结果 | Markdown 表格输出到 `results/` |
 
 ---
 
-## 项目结构
+## 关键文件
 
 ```
-icrush-influencer-mvp/
-├── icrush/              # 核心库
-│   ├── config.py        # 阈值常量 + API key
-│   ├── wordlists.py     # 字典（德/英/城市/男名）
-│   ├── language.py      # 语言检测(langdetect)、地区、性别、URL 解析
-│   ├── judges.py        # 短路淘汰 + caption 判定
-│   ├── pipeline.py      # 四阶段编排 + Playwright 兜底（主线入口）
-│   ├── discovery.py     # 自动发现引擎（Phase 2）
-│   ├── classifier.py    # 商单分类
-│   ├── dedup.py         # KOL 查重 API 客户端
-│   ├── gender.py        # 头像检测预留（需 API key）
-│   ├── apify.py         # Apify HTTP 客户端
-│   ├── wednesday.py     # Wednesday 缓存 + 实时查询 + 关键词搜索
-│   ├── airtable.py      # Airtable 排除名单
-│   ├── feishu.py        # 飞书排除名单
-│   └── report.py        # Markdown 表格输出
-├── scripts/             # CLI 入口
-│   ├── run_batch.py     # icrush-batch 主入口
-│   ├── discover.py      # 自动发现入口
-│   └── ...
-├── docs/
-│   └── rules.md         # 完整判定规则（最新 v0.7）
-├── data/                # 缓存 + 输入文件（gitignored）
-├── results/             # 批次输出报表
-├── AGENT.md             # 当前文件
-├── pyproject.toml       # 项目元信息
-└── README.md            # 用户端说明
+icrush/
+  discoverer_hashtag.py    # Apify hashtag 搜索
+  discoverer_snowball.py   # Apify 雪球法（种子 -> hashtag）
+  discoverer_suggested.py  # DrissionPage 推荐发现（新增）
+  discovery.py             # Wednesday 发现引擎
+  dedup.py                 # KOL 查重 API
+  pipeline.py              # 四阶段编排
+  judges.py                # 短路淘汰 + caption 判定
+  language.py              # 语言检测、地区、职业、性别
+  wordlists.py             # 词典
+  wednesday.py             # 缓存读写 + 实时查询
+  classifier.py            # 商单分类
+  report.py                # Markdown 表格输出
+  airtable.py / feishu.py # 排除名单 fallback
+  config.py                # 阈值常量
+
+scripts/
+  run_batch.py             # 主入口（用户贴URL时永远用这个）
+  discover.py              # 统一发现 CLI（--method wednesday/hashtag/snowball/suggested）
+  ig_stealth_search.mjs    # Playwright stealth IG 搜索
 ```
 
 ---
 
-## Pipeline 阶段速览
+## Pipeline 速览
 
 | Stage | 做什么 | 淘汰即停 |
-|-------|--------|----------|
-| STAGE 0 | KOL 查重（调用 Lambda API） | 已入库则跳过 |
-| STAGE 0.5 | 解析 URL，去重 | - |
-| STAGE 1 | 抓取 Profile + 短路淘汰（男博主/私密/帖数/粉丝） | 命中即终止 |
-| STAGE 1.5 | Wednesday 受众查询（命中则完全采信） | - |
-| STAGE 2 | 抓取 20 条 posts + 商单分类 | - |
-| STAGE 3 | 评论分析 + 女粉占比 + 最终判定 | 通过/淘汰/置换/复查 |
+|-------|--------|---------|
+| STAGE 0 | KOL 查重（Lambda API） | 已入库则跳过 |
+| STAGE 1 | Profile + 短路淘汰 | 命中即终止 |
+| STAGE 1.5 | Wednesday 受众查询 | - |
+| STAGE 2 | 20 条 posts + 商单 | - |
+| STAGE 3 | 评论 + 判定 | 通过/淘汰/置换/复查 |
+
+完整规则见 `docs/rules.md`
 
 ---
 
-## 当前会话状态
+## 发现方式对比（2026-06-23 验证结果）
 
-> 使用前更新此节 - 记录当前在做什么、做到哪了、有什么决策和待办。
-
-### 活跃工作
-（无）
-
-### 最近改动（未提交）
-- .env.example / README.md / docs/rules.md - 文档更新
-- icrush/config.py / discovery.py / language.py / pipeline.py - 代码修改
-- icrush/dedup.py - 新增去重模块
-- results/2026-06-17_batch1_*.md - 今天批次结果
-
-### 关键决策记录
-- 语言检测用 langdetect 库（Google 算法），不用词表法
-- 土耳其语映射为 unknown，不计入 caption 德语比例
-- 女粉占比：男粉 <= 20%（>100K 放宽到 <= 35%）
-- 不使用 asyncio 并发，保持同步处理
-- IG reel 占比 >50% 时帖数下限放宽到 150
-
-### 待办
-- pipeline.py 加失败重试
-- 写简单的 benchmark 脚本
+| 方法 | 代码 | 状态 | 费用 | 说明 |
+|------|------|------|------|------|
+| **Playwright stealth IG 搜索** | `ig_stealth_search.mjs` | 已验证可用 | 免费 | 绕过 IG 反爬，直搜 hashtag 页 |
+| **Playwright bio 验证** | `ig_bio_check.mjs` | 已验证可用 | 免费 | 逐个查 bio，判断是否德国 |
+| **Wednesday 搜索** | `--method wednesday` | 可用（需配额） | Wednesday 月配额 | 7/1 重置 |
+| **Apify hashtag 搜索** | `--method hashtag` | 机制已验证 | Apify 按量计费 | 需充值 |
+| **雪球法** | `--method snowball` | 代码就绪 | 同上 | 种子 -> hashtag -> 更多 |
+| **DrissionPage 推荐发现** | `--method suggested` | 代码就绪（待实测） | 免费 | 种子 -> IG 为你推荐 |
 
 ---
 
-## 开发约定
+## 重要约定
 
-- 语言：全部用 ASCII 写代码，文件名、变量名、注释用英文，字符串内容可以是中文
-- 配置：敏感信息放 .env（已 gitignored），示例放 .env.example
-- git：功能完整时 commit，commit message 用英文，前缀规范（feat/fix/docs/refactor/remove）
-- 容灾：外部服务挂了不阻塞主流程，必须有兜底
-- 不要：引入新的大依赖、动 .env、改 gitignore 已涵盖的规则
+1. **用户贴 URL -> 永远用 `python scripts/run_batch.py`**
+2. **输出表格保持输入顺序**
+3. **发现方法优先选免费的**（Playwright / DrissionPage），配额留给 Wednesday
+
+### 偏好（非硬性，最终人工选人时在意）
+- 白人年轻美女达人，时尚/穿搭/美妆/生活方式类
+- 要有口播商单（不只是图文 #ad）
+- IG 为主，TT 也可以
+- 反目标：民族服饰 / 游戏 / 食物 / 亲子 / 炫富 / 品牌创始人 / 品牌官方号 / 宠物 / DIY
+
+### 查重机制（三重）
+- Lambda API（主）：`POST {account, platform}` -> "有重复"则跳过
+- Airtable / 飞书（fallback）：lookup by username
+- 本地文件 `data/exclusion_list.json`
 
 ---
 
-## 我在用哪个工具
+## 当前会话状态（2026-06-24）
 
-- [ ] **Codex**（桌面版）
-- [ ] **Claude Code CLI**（终端）
+### 本会话重大突破
+- **IG 类似账户三步法验证成功**：类似账户 → 为你推荐 → 查看全部 → 滚动 → 提取
+  - 每个种子可挖出 ~80 个关联达人
+  - 旧方法全部失效原因：IG 把推荐从页面区域改成了弹窗+查看全部
+  - 生产脚本：`scripts/fetch_similar_accounts_v3.mjs`
+  - 详细文档：`.claude/memory/ig_similar_accounts_method.md`
+
+### 本会话验证结论
+- Apify `relatedProfiles`：❌ 永久失效（IG 4月起服务端移除）
+- Playwright API 拦截 `edge_related_profiles`：❌ IG 响应中字段不存在
+- Playwright HTML（旧版）：❌ 旧脚本找的是老 UI 布局
+- DrissionPage `--method suggested`：❌ 同上 + cookies 过期
+- **Playwright 弹窗三步法**：✅ 每个种子 ~80 个达人，免费
+
+### 待办（按优先级）
+1. [x] 实测 IG 类似账户抓取 → **已突破：三步弹窗法**
+2. [ ] 将三步法整合进 `discoverer_suggested.py` 或新模块
+3. [ ] Apify 充值后跑 `--method hashtag --run`（预算 $4.998 剩余）
+4. [ ] Wednesday 配额重置后刷新缓存（7/1）
+5. [ ] 完善品牌官方号过滤名单（如需）
