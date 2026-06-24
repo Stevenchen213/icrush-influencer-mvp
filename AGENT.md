@@ -28,10 +28,48 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 | 层 | 选型 |
 |---|------|
 | 语言 | Python >=3.11 |
-| 依赖 | httpx, langdetect, playwright, python-dotenv, drissionpage |
-| 数据源 | Apify Actors、Wednesday API、Playwright stealth、DrissionPage |
+| 依赖 | httpx, langdetect, playwright, python-dotenv |
+| 数据源 | Playwright CDP（IG 类似账户）、Apify Actors、Wednesday API |
 | 容灾 | Apify 失败 -> Playwright headless 兜底 |
 | 结果 | Markdown 表格输出到 `results/` |
+
+---
+
+## 达人获取：唯一方法
+
+### IG 类似账户三步法（2026-06-24 验证）
+
+**这是目前唯一有效的达人发现方式。**
+
+```
+种子达人主页 → 点击"类似账户" → 弹窗 → 点击"查看全部" → 滚动加载 → 提取
+每个种子 ~80 个关联达人，完全免费
+```
+
+脚本：`scripts/fetch_similar_accounts_v3.mjs`
+文档：`docs/similar_accounts_guide.md`
+
+### 日常流程
+
+```bash
+# 1. 启动 Chrome CDP（先正常关闭 Chrome）
+chrome --remote-debugging-port=9222
+
+# 2. 提取类似达人（安全模式，每次最多5个种子）
+node scripts/fetch_similar_accounts_v3.mjs seed1 seed2 seed3 seed4 seed5
+
+# 3. 喂入 pipeline
+python scripts/run_batch.py data/input_similar_combined.txt
+```
+
+### 安全策略
+
+| 参数 | 值 |
+|------|-----|
+| 种子间隔 | 30-90s 随机 |
+| 单次上限 | 5 种子 |
+| 每日上限 | 7-8 次会话 |
+| 滚动抖动 | ±400px, ±200ms |
 
 ---
 
@@ -39,11 +77,6 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ```
 icrush/
-  discoverer_hashtag.py    # Apify hashtag 搜索
-  discoverer_snowball.py   # Apify 雪球法（种子 -> hashtag）
-  discoverer_suggested.py  # DrissionPage 推荐发现（新增）
-  discovery.py             # Wednesday 发现引擎
-  dedup.py                 # KOL 查重 API
   pipeline.py              # 四阶段编排
   judges.py                # 短路淘汰 + caption 判定
   language.py              # 语言检测、地区、职业、性别
@@ -51,13 +84,19 @@ icrush/
   wednesday.py             # 缓存读写 + 实时查询
   classifier.py            # 商单分类
   report.py                # Markdown 表格输出
+  dedup.py                 # KOL 查重 API
   airtable.py / feishu.py # 排除名单 fallback
+  apify.py                 # Apify API 客户端
   config.py                # 阈值常量
 
 scripts/
   run_batch.py             # 主入口（用户贴URL时永远用这个）
-  discover.py              # 统一发现 CLI（--method wednesday/hashtag/snowball/suggested）
-  ig_stealth_search.mjs    # Playwright stealth IG 搜索
+  fetch_similar_accounts_v3.mjs  # 类似账户提取（唯一发现方法）
+  refresh_wednesday_cache.py     # 手动刷新 Wednesday 缓存
+
+docs/
+  rules.md                 # 完整规则
+  similar_accounts_guide.md # 类似账户提取指南
 ```
 
 ---
@@ -76,24 +115,12 @@ scripts/
 
 ---
 
-## 发现方式对比（2026-06-23 验证结果）
-
-| 方法 | 代码 | 状态 | 费用 | 说明 |
-|------|------|------|------|------|
-| **Playwright stealth IG 搜索** | `ig_stealth_search.mjs` | 已验证可用 | 免费 | 绕过 IG 反爬，直搜 hashtag 页 |
-| **Playwright bio 验证** | `ig_bio_check.mjs` | 已验证可用 | 免费 | 逐个查 bio，判断是否德国 |
-| **Wednesday 搜索** | `--method wednesday` | 可用（需配额） | Wednesday 月配额 | 7/1 重置 |
-| **Apify hashtag 搜索** | `--method hashtag` | 机制已验证 | Apify 按量计费 | 需充值 |
-| **雪球法** | `--method snowball` | 代码就绪 | 同上 | 种子 -> hashtag -> 更多 |
-| **DrissionPage 推荐发现** | `--method suggested` | 代码就绪（待实测） | 免费 | 种子 -> IG 为你推荐 |
-
----
-
 ## 重要约定
 
-1. **用户贴 URL -> 永远用 `python scripts/run_batch.py`**
-2. **输出表格保持输入顺序**
-3. **发现方法优先选免费的**（Playwright / DrissionPage），配额留给 Wednesday
+1. **获取达人 -> 永远用 `node scripts/fetch_similar_accounts_v3.mjs`**
+2. **用户贴 URL -> 永远用 `python scripts/run_batch.py`**
+3. **输出表格保持输入顺序**
+4. **Apify 仅用于 pipeline 内 profile/posts 抓取，不用于发现**
 
 ### 偏好（非硬性，最终人工选人时在意）
 - 白人年轻美女达人，时尚/穿搭/美妆/生活方式类
@@ -110,23 +137,14 @@ scripts/
 
 ## 当前会话状态（2026-06-24）
 
-### 本会话重大突破
-- **IG 类似账户三步法验证成功**：类似账户 → 为你推荐 → 查看全部 → 滚动 → 提取
-  - 每个种子可挖出 ~80 个关联达人
-  - 旧方法全部失效原因：IG 把推荐从页面区域改成了弹窗+查看全部
-  - 生产脚本：`scripts/fetch_similar_accounts_v3.mjs`
-  - 详细文档：`.claude/memory/ig_similar_accounts_method.md`
-
-### 本会话验证结论
-- Apify `relatedProfiles`：❌ 永久失效（IG 4月起服务端移除）
-- Playwright API 拦截 `edge_related_profiles`：❌ IG 响应中字段不存在
-- Playwright HTML（旧版）：❌ 旧脚本找的是老 UI 布局
-- DrissionPage `--method suggested`：❌ 同上 + cookies 过期
-- **Playwright 弹窗三步法**：✅ 每个种子 ~80 个达人，免费
+### 本会话完成
+- **IG 类似账户三步法验证成功并整合为唯一发现方法**
+- 删除所有旧发现方法（hashtag/snowball/suggested/Wednesday discovery）
+- 项目清理：仅保留 pipeline + 类似账户提取
+- 安全策略内置：种子间隔、滚动抖动、会话日志
 
 ### 待办（按优先级）
-1. [x] 实测 IG 类似账户抓取 → **已突破：三步弹窗法**
-2. [ ] 将三步法整合进 `discoverer_suggested.py` 或新模块
-3. [ ] Apify 充值后跑 `--method hashtag --run`（预算 $4.998 剩余）
+1. [x] IG 类似账户自动提取 → **已完成**
+2. [x] 项目清理，移除旧方法 → **已完成**
+3. [ ] Apify 充值后恢复 pipeline 正常运行
 4. [ ] Wednesday 配额重置后刷新缓存（7/1）
-5. [ ] 完善品牌官方号过滤名单（如需）
