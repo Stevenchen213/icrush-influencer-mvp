@@ -11,8 +11,8 @@ data/*
 !package-lock.json
 !.claude/**/*.json
 
-# 结果输出
-results/
+# 结果输出（跟踪到 Git）
+# results/
 
 # 截图 / 临时文件
 *.png
