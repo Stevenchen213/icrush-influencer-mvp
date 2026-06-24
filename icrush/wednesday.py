@@ -211,15 +211,15 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                     sys.stdout.flush()
                     try:
                         result = await page.evaluate("""async ({username, token}) => {
-                            const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=10&offset=0', {
+                            const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
                                 method: 'POST',
                                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-                                body: JSON.stringify({ current_list: '389827', criterias: [{ value: username, weight: 1, field: 'all', type: 'should' }], filters: [], audience_filters: [], social_media_matching_operator: 'or', should_save: false, track_hits_results: 10000, score_model: 'default' }),
+                                body: JSON.stringify({ criterias: [{ value: '@' + username, weight: 100, field: 'social_media.username', type: 'should' }], filters: [], audience_filters: [], social_media_matching_operator: 'or', should_save: false, track_hits_results: 10000, score_model: 'default' }),
                             });
                             const sd = await sr.json();
                             const infs = sd.influencers || [];
 
-                            const candidates = infs.slice(0, 5);
+                            const candidates = infs.slice(0, 20);
                             for (const inf of candidates) {
                                 try {
                                     const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${inf.id || inf.influencer_id}`, {
@@ -367,7 +367,6 @@ async def search_keyword(
                 # Build search body with keyword criteria
                 offset = (page - 1) * per_page
                 body = {
-                    "current_list": "389827",
                     "criterias": [{
                         "value": keyword,
                         "weight": 1,

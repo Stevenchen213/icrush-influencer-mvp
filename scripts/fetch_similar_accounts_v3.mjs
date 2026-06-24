@@ -171,12 +171,29 @@ async function extractSimilarAccounts(page, seed, cfg) {
   }
   await sleep(2000);
 
+  // Detect logged-in user to exclude
+  const loggedInUser = await page.evaluate(() => {
+    // The sidebar/profile link often has the user's own username
+    const links = document.querySelectorAll('a[href^="/"]');
+    for (const a of links) {
+      const href = a.getAttribute('href');
+      if (!href) continue;
+      // Look for "Profile" link or the first profile-style link in nav
+      const parent = a.closest('nav, [role="navigation"], div[role="tablist"]');
+      if (!parent) continue;
+      const m = href.match(/^\/([a-zA-Z0-9._-]{2,30})\/?$/);
+      if (m) return m[1].toLowerCase();
+    }
+    return null;
+  });
+
   // Extract
   const links = await page.evaluate(() => {
     const found = new Set();
     const EXCLUDE = new Set([
       "explore", "accounts", "p", "reel", "stories", "direct",
-      "about", "popular", "reels", "search", "meta", "api", "threads",
+      "about", "popular", "reels", "search",
+      "meta", "api", "threads", "instagram",
     ]);
 
     document.querySelectorAll('a[href^="/"]').forEach(a => {
@@ -189,7 +206,10 @@ async function extractSimilarAccounts(page, seed, cfg) {
     return [...found];
   });
 
-  const clean = links.filter(u => u !== seed.toLowerCase());
+  let clean = links.filter(u => u !== seed.toLowerCase());
+  if (loggedInUser) {
+    clean = clean.filter(u => u !== loggedInUser);
+  }
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`  => ${clean.length} accounts (${elapsed}s)`);
   return clean;

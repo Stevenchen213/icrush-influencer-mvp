@@ -141,10 +141,20 @@ docs/
 - **IG 类似账户三步法验证成功并整合为唯一发现方法**
 - 删除所有旧发现方法（hashtag/snowball/suggested/Wednesday discovery）
 - 项目清理：仅保留 pipeline + 类似账户提取
-- 安全策略内置：种子间隔、滚动抖动、会话日志
+- 删除 STAGE 3 死代码（评论检查永不触发）
+- `--auto-pipeline` 一键全自动
+- **Wednesday 搜索修复**：`field: social_media.username` + `@`前缀 + `weight: 100`
+- **完整流程实测**：@laraselina + @eva.waldenberger → 135人 → 74✅/23🟡/6置换/32❌
+  - Apify: $4.95 | Wednesday: 命中率 38%
+- **Bug 修复**：
+  - 平均浏览量改用近20条（修复了用近3个月的 bug）
+  - 自动排除登录用户自己的账号
+  - Wednesday 搜索参数修正，命中率 29%→38%
 
-### 待办（按优先级）
+### 待办
 1. [x] IG 类似账户自动提取 → **已完成**
 2. [x] 项目清理，移除旧方法 → **已完成**
-3. [ ] Apify 充值后恢复 pipeline 正常运行
+3. [x] 完整流程实测 → **已完成**
 4. [ ] Wednesday 配额重置后刷新缓存（7/1）
+5. [ ] 配置 DEDUP_API_TOKEN 启用查重
+6. [ ] 每天 7-8 轮跑种子积累达人库
