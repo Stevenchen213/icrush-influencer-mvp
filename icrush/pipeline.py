@@ -531,6 +531,8 @@ class Pipeline:
                 "genderFemale": detail.get("gender", {}).get("female") if detail.get("gender") else None,
                 "topCountry": detail.get("topCountry"),
                 "topCity": detail.get("topCity"),
+                "dePct": detail.get("dePct", 0),
+                "atPct": detail.get("atPct", 0),
             }
 
             if is_short:
@@ -572,9 +574,11 @@ class Pipeline:
                 else:
                     ig_survivors.remove(u)
             else:
-                tc = detail.get("topCountry")
+                de_pct = detail.get("dePct", 0) or 0
+                at_pct = detail.get("atPct", 0) or 0
+                combined = de_pct + at_pct
                 tci = detail.get("topCity")
-                print(f"     ✅ 地区=DE {tc['pct']}% + 城市={tci['name'] if tci else '?'} + 女粉 {female_str}")
+                print(f"     ✅ DE+AT={combined}% + 城市={tci['name'] if tci else '?'} + 女粉 {female_str}")
 
         return wednesday_data
 

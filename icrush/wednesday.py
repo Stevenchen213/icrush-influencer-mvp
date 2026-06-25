@@ -40,8 +40,8 @@ def wednesday_lookup(username: str) -> dict:
     if not entry or not entry.get("found"):
         return {"found": False}
 
-    # Must have at least one of gender / country / city to be "usable"
-    has_data = entry.get("gender") or entry.get("topCountry") or entry.get("topCity")
+    # Must have at least one of gender / country / city / dePct to be "usable"
+    has_data = entry.get("gender") or entry.get("topCountry") or entry.get("topCity") or entry.get("dePct")
     if not has_data:
         return {"found": False}
 
@@ -50,6 +50,8 @@ def wednesday_lookup(username: str) -> dict:
         "gender": entry.get("gender"),
         "topCountry": entry.get("topCountry"),
         "topCity": entry.get("topCity"),
+        "dePct": entry.get("dePct", 0),
+        "atPct": entry.get("atPct", 0),
     }
 
 
@@ -78,18 +80,20 @@ def is_german_city(city_name: str | None) -> bool:
 def judge_wednesday_region(wd: dict) -> dict:
     """Check if Wednesday audience data passes the region test.
 
+    DE + AT combined >= WEDNESDAY_COUNTRY_MIN (35%).
+
     Returns {'pass': bool, 'reason': str}.
     """
-    tc = wd.get("topCountry")
-    if not tc or tc.get("code") != "DE":
+    de_pct = wd.get("dePct", 0) or 0
+    at_pct = wd.get("atPct", 0) or 0
+    combined = de_pct + at_pct
+
+    if combined < WEDNESDAY_COUNTRY_MIN:
+        tc = wd.get("topCountry")
+        top_code = tc.get("code", "?") if tc else "?"
         return {
             "pass": False,
-            "reason": f"受众国家#1={tc.get('code', '?') if tc else '?'} 非 DE",
-        }
-    if tc.get("pct", 0) < WEDNESDAY_COUNTRY_MIN:
-        return {
-            "pass": False,
-            "reason": f"受众 DE 仅 {tc['pct']}%<{WEDNESDAY_COUNTRY_MIN}%",
+            "reason": f"受众 DE+AT 仅 {combined}%<{WEDNESDAY_COUNTRY_MIN}%（#1={top_code}）",
         }
 
     top_city = wd.get("topCity")
@@ -240,11 +244,19 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                                         const ci = aud?.city_last_picture?.values || null;
                                         let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
                                         let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
+                                        // Extract DE + AT percentages for combined region check
+                                        let dePct = 0, atPct = 0;
+                                        if (c) {
+                                            if (c.DE) dePct = Math.round(c.DE * 10000) / 100;
+                                            if (c.AT) atPct = Math.round(c.AT * 10000) / 100;
+                                        }
                                         return {
                                             found: true,
                                             gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
                                             topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
                                             topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
+                                            dePct: dePct,
+                                            atPct: atPct,
                                             _matchedName: inf.name,
                                             _matchedVia: igMatch ? 'IG' : 'TT',
                                         };
@@ -258,8 +270,10 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                         if result.get("found"):
                             g = result.get("gender")
                             g_str = f"女{g['female']}%" if g else "?"
-                            tc = result.get("topCountry")
-                            c_str = f" {tc['code']} {tc['pct']}%" if tc else ""
+                            de_pct = result.get("dePct", 0) or 0
+                            at_pct = result.get("atPct", 0) or 0
+                            combined = de_pct + at_pct
+                            c_str = f" DE+AT={combined}%"
                             via = result.get("_matchedVia", "?")
                             print(f"✅ {g_str}{c_str} ({via})")
                         else:
