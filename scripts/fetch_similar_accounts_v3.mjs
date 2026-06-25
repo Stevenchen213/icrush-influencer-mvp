@@ -140,10 +140,27 @@ async function extractSimilarAccounts(page, seed, cfg) {
   await sleep(jitter(cfg.clickDelayBase, cfg.clickDelayJitter));
 
   // Step 3: Click "查看全部" / "See all"
+  // Search within the dialog/modal that appeared after clicking Similar accounts
   console.log("  [3/4] Clicking 'See all'...");
-  const seeAll = page.locator("span, a, div").filter({
-    hasText: /^查看全部$|^See [Aa]ll$|^View [Aa]ll$/i,
-  }).first();
+  // Try multiple strategies to find the right "See all" link
+  let seeAll = page.locator('[role="dialog"] a, [role="dialog"] span').filter({
+    hasText: /^查看全部$|^See [Aa]ll$|^View [Aa]ll$/,
+  });
+  if ((await seeAll.count()) === 0) {
+    // Fallback: look for any short-text element with the target text
+    seeAll = page.locator("a, span, button").filter({
+      hasText: /^查看全部$|^See\s*[Aa]ll$|^View\s*[Aa]ll$/,
+    });
+  }
+  if ((await seeAll.count()) === 0) {
+    // Last resort: broader match but filter out huge text blobs
+    seeAll = page.locator("a, span, div, button").filter({
+      hasText: /查看全部|See\s*[Aa]ll|View\s*[Aa]ll/,
+    }).filter({
+      hasNotText: /帖子|Reels|粉丝|followers|关注|following|创建|消息|通知|搜索|首页|Meta|Threads|Afrikaans/i,
+    });
+  }
+  seeAll = seeAll.first();
 
   if ((await seeAll.count()) > 0) {
     await seeAll.click({ timeout: 10000 });
@@ -152,37 +169,80 @@ async function extractSimilarAccounts(page, seed, cfg) {
     console.log("  [!] No 'See all' link — using modal preview only");
   }
 
-  // Step 4: Scroll with human-like jitter
-  console.log(`  [4/4] Scrolling (${cfg.scrollCount} passes, human-like)...`);
+  // Step 4: Scroll with human-like jitter — target the correct container
+  console.log(`  [4/4] Scrolling (max ${cfg.scrollCount} passes, stops when no new links)...`);
+  let prevLinkCount = 0;
+  let noNewLinksStreak = 0;
   for (let i = 0; i < cfg.scrollCount; i++) {
     const amount = jitter(cfg.scrollAmountBase, cfg.scrollAmountJitter);
     await page.evaluate((px) => {
+      // Find ALL scrollable containers (not just inline-style ones)
+      const all = document.querySelectorAll('*');
+      for (const el of all) {
+        if (el.scrollHeight > el.clientHeight && el.clientHeight > 0) {
+          el.scrollTop += px;
+        }
+      }
       window.scrollBy(0, px);
-      document.querySelectorAll('[style*="overflow"]').forEach(el => {
-        el.scrollTop += px;
-      });
     }, amount);
     await sleep(jitter(cfg.scrollDelayBase, cfg.scrollDelayJitter));
+
+    // Check link count to decide if we should stop
+    const currentCount = await page.evaluate(() => {
+      const s = new Set();
+      const ex = new Set(["explore","accounts","p","reel","stories","direct","about","popular","reels","search","meta","api","threads","instagram"]);
+      document.querySelectorAll('a[href^="/"]').forEach(a => {
+        const m = a.href.match(/instagram\.com\/([a-zA-Z0-9._-]{2,30})\/?$/);
+        if (m && !ex.has(m[1].toLowerCase())) s.add(m[1].toLowerCase());
+      });
+      return s.size;
+    });
+
+    if (currentCount === prevLinkCount) {
+      noNewLinksStreak++;
+      if (noNewLinksStreak >= 4 && currentCount > 10) {
+        console.log(`    No new links after ${i + 1} scrolls (${currentCount} total), done.`);
+        break;
+      }
+    } else {
+      noNewLinksStreak = 0;
+    }
+    prevLinkCount = currentCount;
 
     // Occasional micro-pause (human behaviour)
     if (Math.random() < 0.05) {
       await sleep(rand(500, 2000));
     }
   }
-  await sleep(2000);
+  await sleep(1500);
 
-  // Detect logged-in user to exclude
+  // Detect logged-in user to exclude (multiple fallback methods)
   const loggedInUser = await page.evaluate(() => {
-    // The sidebar/profile link often has the user's own username
+    // Method 1: IG's own window.__INITIAL_STATE__ or similar
+    try {
+      const scripts = document.querySelectorAll('script[type="application/json"]');
+      for (const s of scripts) {
+        const data = JSON.parse(s.textContent || '{}');
+        const viewer = data?.config?.viewer || data?.viewer;
+        if (viewer?.username) return viewer.username.toLowerCase();
+      }
+    } catch {}
+    // Method 2: Look for "Profile" link in nav/sidebar
     const links = document.querySelectorAll('a[href^="/"]');
     for (const a of links) {
       const href = a.getAttribute('href');
       if (!href) continue;
-      // Look for "Profile" link or the first profile-style link in nav
       const parent = a.closest('nav, [role="navigation"], div[role="tablist"]');
       if (!parent) continue;
       const m = href.match(/^\/([a-zA-Z0-9._-]{2,30})\/?$/);
       if (m) return m[1].toLowerCase();
+    }
+    // Method 3: Look for the "Profile" button text in sidebar
+    for (const a of links) {
+      if (a.textContent?.trim() === 'Profile' || a.textContent?.trim() === '个人主页') {
+        const m = a.getAttribute('href')?.match(/^\/([a-zA-Z0-9._-]{2,30})\/?$/);
+        if (m) return m[1].toLowerCase();
+      }
     }
     return null;
   });
