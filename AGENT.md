@@ -52,15 +52,19 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 ### 日常流程
 
 ```bash
-# 1. 启动 Chrome CDP（先正常关闭 Chrome）
-chrome --remote-debugging-port=9222
+# 1. 关闭所有 Chrome 窗口，等 15 秒（确保后台进程退干净）
+# 2. 用独立 user-data-dir 启动（必须，Chrome 136+ 安全限制）
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir=C:\Users\yaxua\chrome-debug
 
-# 2. 提取类似达人（安全模式，每次最多5个种子）
-node scripts/fetch_similar_accounts_v3.mjs seed1 seed2 seed3 seed4 seed5
+# 3. 如果首次使用 chrome-debug 目录，需登录 IG（一次性的）
+# 4. 提取类似达人
+node scripts/fetch_similar_accounts_v3.mjs seed1 seed2
 
-# 3. 喂入 pipeline
+# 5. 喂入 pipeline
 python scripts/run_batch.py data/input_similar_combined.txt
 ```
+
+> ⚠️ **必须用 `--user-data-dir`，不能用 `--profile-directory`**：Chrome 136+ 使用默认 User Data 目录时会忽略 `--remote-debugging-port`（2026-06-25 排查确认）。
 
 ### 安全策略
 
