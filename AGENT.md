@@ -135,26 +135,27 @@ docs/
 
 ---
 
-## 当前会话状态（2026-06-24）
+## 当前会话状态（2026-06-25）
 
 ### 本会话完成
-- **IG 类似账户三步法验证成功并整合为唯一发现方法**
-- 删除所有旧发现方法（hashtag/snowball/suggested/Wednesday discovery）
-- 项目清理：仅保留 pipeline + 类似账户提取
-- 删除 STAGE 3 死代码（评论检查永不触发）
-- `--auto-pipeline` 一键全自动
-- **Wednesday 搜索修复**：`field: social_media.username` + `@`前缀 + `weight: 100`
-- **完整流程实测**：@laraselina + @eva.waldenberger → 135人 → 74✅/23🟡/6置换/32❌
-  - Apify: $4.95 | Wednesday: 命中率 38%
-- **Bug 修复**：
-  - 平均浏览量改用近20条（修复了用近3个月的 bug）
-  - 自动排除登录用户自己的账号
-  - Wednesday 搜索参数修正，命中率 29%→38%
+- **Wednesday 地区规则调整**：DE+AT 合计 ≥35%（不再只看 DE）
+- **Wednesday 搜索修复**：两阶段匹配（快路径+慢路径），修复搜索结果 instagrams 为空导致漏查
+- **查重上线**：DEDUP_API_TOKEN 已配置，STAGE 0 生效
+- **135人重跑**：查重拦截 105 → 30 新人 → 7✅/11🟡/10❌/2置换
+  - Apify: $0.93（vs 昨天 $4.95，查重省了 80%）
+- **鲁棒性加固**：
+  - Wednesday 登录加重试（3次递增延迟）
+  - null 值防护：dePct/atPct 为 null 时重新查询而非当 0% 淘汰
+  - 缓存 TTL：found: false 条目 7 天后过期自动重试
+  - 登录失败标记：受影响用户标记 🟡 复查 + 注明原因
+
+### 已验证案例
+- vanillaholica: 旧规则 ❌（DE 31.67%）→ 新规则 ✅（DE+AT 53.62%）
+- lissi.maria: 搜索漏查 → slow-path 修复后查到 DE+AT 77.7%
+- annalauraamenta/vickyheiler: 缓存 null → 修复后 ✅ 通过
 
 ### 待办
-1. [x] IG 类似账户自动提取 → **已完成**
-2. [x] 项目清理，移除旧方法 → **已完成**
-3. [x] 完整流程实测 → **已完成**
 4. [ ] Wednesday 配额重置后刷新缓存（7/1）
-5. [ ] 配置 DEDUP_API_TOKEN 启用查重
+5. [x] 配置 DEDUP_API_TOKEN 启用查重 → **已完成**
 6. [ ] 每天 7-8 轮跑种子积累达人库
+7. [ ] GitHub push（网络/认证问题）

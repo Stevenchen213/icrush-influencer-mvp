@@ -3,6 +3,8 @@
 import asyncio
 import json
 import sys
+import time
+from datetime import datetime, timezone
 
 from icrush.config import (
     CACHE_FILE,
@@ -15,6 +17,9 @@ from icrush.config import (
 from icrush.wordlists import AUSTRIAN_CITIES, GERMAN_CITY_ABBR, GERMAN_CITY_LIST
 
 _cache: dict | None = None
+
+# "found: false" cache entries expire after N days — re-query next time
+WEDNESDAY_CACHE_TTL_DAYS = 7
 
 
 def load_wednesday_cache() -> dict:
@@ -38,6 +43,10 @@ def wednesday_lookup(username: str) -> dict:
     cache = load_wednesday_cache()
     entry = cache.get(username)
     if not entry or not entry.get("found"):
+        return _recheck_if_stale(username, cache)
+
+    # login failure entries → re-query (don't serve stale error)
+    if entry.get("_wednesdayFailed"):
         return {"found": False}
 
     # Must have at least one of gender / country / city / dePct to be "usable"
@@ -45,14 +54,38 @@ def wednesday_lookup(username: str) -> dict:
     if not has_data:
         return {"found": False}
 
+    # Null protection: if dePct is None (old cache format), need re-query
+    if entry.get("dePct") is None and entry.get("atPct") is None:
+        return {"found": False}
+
     return {
         "found": True,
         "gender": entry.get("gender"),
         "topCountry": entry.get("topCountry"),
         "topCity": entry.get("topCity"),
-        "dePct": entry.get("dePct", 0),
-        "atPct": entry.get("atPct", 0),
+        "dePct": entry.get("dePct") or 0,
+        "atPct": entry.get("atPct") or 0,
     }
+
+
+def _recheck_if_stale(username: str, cache: dict) -> dict:
+    """Return {'found': False} unless the cached 'found: false' is older than TTL."""
+    entry = cache.get(username, {})
+    if not isinstance(entry, dict):
+        return {"found": False}
+
+    last_attempt = entry.get("_lastAttempt")
+    if last_attempt:
+        try:
+            age_days = (time.time() - last_attempt) / 86400
+            if age_days < WEDNESDAY_CACHE_TTL_DAYS:
+                return {"found": False}  # still fresh, don't re-query
+        except (TypeError, ValueError):
+            pass
+
+    # Stale or no timestamp → clear entry so live_lookup re-queries
+    cache.pop(username, None)
+    return {"found": False}
 
 
 def is_german_city(city_name: str | None) -> bool:
@@ -138,6 +171,96 @@ def save_cache(cache: dict) -> None:
     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+async def _wednesday_login(page, *, max_retries: int = 3) -> str | None:
+    """Log into Wednesday and return an access token, or None on failure.
+
+    Retries up to max_retries times with escalating delays (5s / 10s / 20s).
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            await page.goto("https://user.wednesday.app/login",
+                            wait_until="domcontentloaded", timeout=30000)
+            await asyncio.sleep(5)
+
+            if "hq.wednesday.app" not in page.url:
+                # Already logged in? Check cookie
+                token = await _extract_token(page)
+                if token:
+                    return token
+
+                # Wait for login form
+                try:
+                    await page.wait_for_selector(
+                        'input[placeholder*="email"], input[id*="ember"]',
+                        timeout=10000)
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+
+                form_exists = await page.evaluate("""() => {
+                    const ins = document.querySelectorAll('input:not([type="hidden"])');
+                    return ins.length >= 2;
+                }""")
+
+                if not form_exists:
+                    if attempt < max_retries:
+                        print(f"   ⚠️ Wednesday 登录表单未加载，重试 {attempt}/{max_retries}...")
+                        await asyncio.sleep(attempt * 5)
+                        continue
+                    print("   ⚠️ Wednesday 登录表单未加载，放弃")
+                    return None
+
+                await page.fill('input[placeholder*="email"]', WEDNESDAY_EMAIL)
+                await page.fill('input[placeholder*="password"]', WEDNESDAY_PASSWORD)
+                await page.click('button:has-text("Log in")')
+                await asyncio.sleep(5)
+
+                for _ in range(6):
+                    if "hq.wednesday.app" in page.url:
+                        break
+                    await asyncio.sleep(2)
+
+                if "hq.wednesday.app" not in page.url:
+                    if attempt < max_retries:
+                        print(f"   ⚠️ Wednesday 登录跳转失败，重试 {attempt}/{max_retries}...")
+                        await asyncio.sleep(attempt * 5)
+                        continue
+                    print("   ⚠️ Wednesday 登录失败，放弃")
+                    return None
+
+            # Extract token
+            token = await _extract_token(page)
+            if token:
+                return token
+
+            if attempt < max_retries:
+                print(f"   ⚠️ 无法提取 Wednesday token，重试 {attempt}/{max_retries}...")
+                await asyncio.sleep(attempt * 5)
+            else:
+                print("   ⚠️ 无法提取 Wednesday token，放弃")
+
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"   ⚠️ Wednesday 登录异常 ({e})，重试 {attempt}/{max_retries}...")
+                await asyncio.sleep(attempt * 5)
+            else:
+                print(f"   ⚠️ Wednesday 登录异常 ({e})，放弃")
+
+    return None
+
+
+async def _extract_token(page) -> str | None:
+    """Extract the Bearer token from Wednesday's auth cookie."""
+    try:
+        return await page.evaluate("""() => {
+            const m = document.cookie.match(/wednesday-production-auth=([^;]+)/);
+            if (!m) return null;
+            return JSON.parse(decodeURIComponent(m[1])).authenticated.access_token;
+        }""")
+    except Exception:
+        return None
+
+
 async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str, dict]:
     """Query Wednesday API directly via Playwright for usernames not in cache.
 
@@ -161,52 +284,18 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
             page = await browser.new_page()
 
             try:
-                # Login
-                await page.goto("https://user.wednesday.app/login",
-                                wait_until="domcontentloaded", timeout=30000)
-                await asyncio.sleep(5)
-
-                if "hq.wednesday.app" not in page.url:
-                    try:
-                        await page.wait_for_selector(
-                            'input[placeholder*="email"], input[id*="ember"]',
-                            timeout=10000)
-                    except Exception:
-                        pass
-                    await asyncio.sleep(2)
-
-                    form_exists = await page.evaluate("""() => {
-                        const ins = document.querySelectorAll('input:not([type="hidden"])');
-                        return ins.length >= 2;
-                    }""")
-
-                    if not form_exists:
-                        print("   ⚠️ Wednesday 登录表单未加载，跳过实时查询")
-                        return results
-
-                    await page.fill('input[placeholder*="email"]', WEDNESDAY_EMAIL)
-                    await page.fill('input[placeholder*="password"]', WEDNESDAY_PASSWORD)
-                    await page.click('button:has-text("Log in")')
-                    await asyncio.sleep(5)
-
-                    for _ in range(6):
-                        if "hq.wednesday.app" in page.url:
-                            break
-                        await asyncio.sleep(2)
-
-                    if "hq.wednesday.app" not in page.url:
-                        print("   ⚠️ Wednesday 登录失败，跳过实时查询")
-                        return results
-
-                # Extract token
-                token = await page.evaluate("""() => {
-                    const m = document.cookie.match(/wednesday-production-auth=([^;]+)/);
-                    if (!m) return null;
-                    return JSON.parse(decodeURIComponent(m[1])).authenticated.access_token;
-                }""")
+                # Login (with 3 retries)
+                token = await _wednesday_login(page, max_retries=3)
 
                 if not token:
-                    print("   ⚠️ 无法提取 Wednesday token")
+                    # Login failed after all retries → mark all as needs-review
+                    print("   ⚠️ Wednesday 登录失败，所有用户标记为需人工复查")
+                    for username in usernames:
+                        results[username] = {
+                            "found": False,
+                            "_wednesdayFailed": True,
+                            "_reason": "Wednesday 登录失败需人工复查",
+                        }
                     return results
 
                 # Query each username
@@ -215,6 +304,7 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                     sys.stdout.flush()
                     try:
                         result = await page.evaluate("""async ({username, token}) => {
+                            // 1. Search by exact Instagram username
                             const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
                                 method: 'POST',
                                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -222,48 +312,88 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                             });
                             const sd = await sr.json();
                             const infs = sd.influencers || [];
+                            const uLower = username.toLowerCase();
 
-                            const candidates = infs.slice(0, 20);
-                            for (const inf of candidates) {
+                            // 2. Fast path: match from search results' embedded instagrams/tiktoks
+                            for (const inf of infs) {
+                                for (const ig of (inf.instagrams || [])) {
+                                    if (ig.username?.toLowerCase() === uLower) {
+                                        // matched! fetch full profile for audience demographics
+                                        return await fetchAudience(inf.id || inf.influencer_id, uLower, 'IG', token);
+                                    }
+                                }
+                                for (const tt of (inf.tiktoks || [])) {
+                                    if (tt.username?.toLowerCase() === uLower) {
+                                        return await fetchAudience(inf.id || inf.influencer_id, uLower, 'TT', token);
+                                    }
+                                }
+                            }
+
+                            // 3. Slow path: search returned results but social accounts are empty.
+                            //    Fetch full profile for the top result to get its instagrams/tiktoks.
+                            for (const inf of infs.slice(0, 5)) {
                                 try {
                                     const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${inf.id || inf.influencer_id}`, {
                                         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
                                     });
                                     const dd = await dr.json();
-                                    const igs = dd.instagrams || [];
-                                    const tts = dd.tiktoks || [];
-
-                                    const igMatch = igs.find(m => m.username?.toLowerCase() === username.toLowerCase());
-                                    const ttMatch = tts.find(m => m.username?.toLowerCase() === username.toLowerCase());
-
-                                    if (igMatch || ttMatch) {
-                                        const med = igMatch || ttMatch;
-                                        const aud = med?.audience || {};
-                                        const g = aud?.gender_image_extractor?.values || null;
-                                        const c = aud?.country_last_picture?.values || null;
-                                        const ci = aud?.city_last_picture?.values || null;
-                                        let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
-                                        let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
-                                        // Extract DE + AT percentages for combined region check
-                                        let dePct = 0, atPct = 0;
-                                        if (c) {
-                                            if (c.DE) dePct = Math.round(c.DE * 10000) / 100;
-                                            if (c.AT) atPct = Math.round(c.AT * 10000) / 100;
+                                    for (const ig of (dd.instagrams || [])) {
+                                        if (ig.username?.toLowerCase() === uLower) {
+                                            return extractAudience(ig, inf.name, 'IG');
                                         }
-                                        return {
-                                            found: true,
-                                            gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
-                                            topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
-                                            topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
-                                            dePct: dePct,
-                                            atPct: atPct,
-                                            _matchedName: inf.name,
-                                            _matchedVia: igMatch ? 'IG' : 'TT',
-                                        };
                                     }
-                                } catch (e) { /* skip */ }
+                                    for (const tt of (dd.tiktoks || [])) {
+                                        if (tt.username?.toLowerCase() === uLower) {
+                                            return extractAudience(tt, inf.name, 'TT');
+                                        }
+                                    }
+                                } catch (e) { /* try next */ }
                             }
+
                             return { found: false };
+
+                            // Helper: fetch full profile, find the matching social account, extract audience
+                            async function fetchAudience(infId, uLower, via, token) {
+                                try {
+                                    const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${infId}`, {
+                                        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+                                    });
+                                    const dd = await dr.json();
+                                    for (const ig of (dd.instagrams || [])) {
+                                        if (ig.username?.toLowerCase() === uLower) return extractAudience(ig, dd.name, 'IG');
+                                    }
+                                    for (const tt of (dd.tiktoks || [])) {
+                                        if (tt.username?.toLowerCase() === uLower) return extractAudience(tt, dd.name, 'TT');
+                                    }
+                                    return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: dd.name, _matchedVia: via };
+                                } catch (e) {
+                                    return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: null, _matchedVia: via };
+                                }
+                            }
+
+                            function extractAudience(med, name, via) {
+                                const aud = med?.audience || {};
+                                const g = aud?.gender_image_extractor?.values || null;
+                                const c = aud?.country_last_picture?.values || null;
+                                const ci = aud?.city_last_picture?.values || null;
+                                let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
+                                let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
+                                let dePct = 0, atPct = 0;
+                                if (c) {
+                                    if (c.DE) dePct = Math.round(c.DE * 10000) / 100;
+                                    if (c.AT) atPct = Math.round(c.AT * 10000) / 100;
+                                }
+                                return {
+                                    found: true,
+                                    gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
+                                    topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
+                                    topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
+                                    dePct: dePct,
+                                    atPct: atPct,
+                                    _matchedName: name,
+                                    _matchedVia: via,
+                                };
+                            }
                         }""", {"username": username, "token": token})
 
                         results[username] = result
@@ -283,11 +413,17 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                         results[username] = {"found": False, "error": str(e)}
                         print(f"⚠️ {e}")
 
-                # Save updated cache
+                # Save updated cache (stamp _lastAttempt on all entries for TTL)
+                now_ts = time.time()
+                for r in results.values():
+                    if isinstance(r, dict) and "_lastAttempt" not in r:
+                        r["_lastAttempt"] = now_ts
                 cache = load_wednesday_cache()
                 cache.update(results)
                 save_cache(cache)
-                print(f"   💾 缓存已更新（+{sum(1 for r in results.values() if r.get('found'))} 人）")
+                found_count = sum(1 for r in results.values() if r.get("found"))
+                fail_count = sum(1 for r in results.values() if r.get("_wednesdayFailed"))
+                print(f"   💾 缓存已更新（+{found_count} 人{f'，{fail_count} 登录失败' if fail_count else ''}）")
 
             finally:
                 await browser.close()

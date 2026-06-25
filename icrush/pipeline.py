@@ -496,12 +496,18 @@ class Pipeline:
                 continue
 
         # Auto-query live for cache misses
+        wednesday_failed = False
         if cache_misses:
             print(f"   🔍 {len(cache_misses)} 人无缓存，自动查询 Wednesday API...")
-            await live_lookup(cache_misses)
+            live_results = await live_lookup(cache_misses)
+            # Check if Wednesday login failed for this batch
+            wednesday_failed = any(
+                r.get("_wednesdayFailed") for r in live_results.values()
+            )
+            if wednesday_failed:
+                print("   ⚠️ Wednesday 登录失败，相关用户将标记为 🟡 复查")
             # Re-read cache after live lookup updated it
             import importlib
-            # force reload the module-level cache to pick up new data
             wednesday_module = importlib.import_module("icrush.wednesday")
             wednesday_module._cache = None  # type: ignore[attr-defined]
 
@@ -516,8 +522,26 @@ class Pipeline:
             detail = wednesday_lookup(u)
             if not detail["found"]:
                 if not is_short:
-                    print(f"  → {key}: ❌ 无缓存（Wednesday 未收录）→ 走原流程")
-                    wednesday_data[key] = {"found": False}
+                    if wednesday_failed and u in cache_misses:
+                        # Wednesday login failed → mark for manual review
+                        self.results[key] = {
+                            "platform": platform, "name": u,
+                            "fans": p.get("fans", 0), "posts": p.get("posts", 0),
+                            "regionAccurate": "-",
+                            "avgViews": None,
+                            "genderFemale": None,
+                            "commercialStats": None,
+                            "verdict": "🟡 复查",
+                            "reason": "Wednesday 登录失败需人工复查",
+                        }
+                        print(f"     🟡 {key}: Wednesday 登录失败 → 标记人工复查")
+                        if platform == "TT":
+                            tt_survivors.remove(u)
+                        else:
+                            ig_survivors.remove(u)
+                    else:
+                        print(f"  → {key}: ❌ 无缓存（Wednesday 未收录）→ 走原流程")
+                        wednesday_data[key] = {"found": False}
                 continue
 
             region_r = judge_wednesday_region(detail)
