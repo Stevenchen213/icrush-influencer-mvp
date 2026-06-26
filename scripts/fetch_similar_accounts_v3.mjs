@@ -162,11 +162,13 @@ async function extractSimilarAccounts(page, seed, cfg) {
   }
   seeAll = seeAll.first();
 
+  let hasSeeAll = true;
   if ((await seeAll.count()) > 0) {
     await seeAll.click({ timeout: 10000 });
     await sleep(jitter(cfg.clickDelayBase, cfg.clickDelayJitter));
   } else {
-    console.log("  [!] No 'See all' link — using modal preview only");
+    console.log("  [!] No 'See all' link — modal preview only, will quick-check then skip if empty");
+    hasSeeAll = false;
   }
 
   // Step 4: Scroll with human-like jitter — target the correct container
@@ -208,6 +210,12 @@ async function extractSimilarAccounts(page, seed, cfg) {
       noNewLinksStreak = 0;
     }
     prevLinkCount = currentCount;
+
+    // Quick abandon: no See all + very few accounts → skip this seed
+    if (!hasSeeAll && i >= 5 && currentCount <= 3) {
+      console.log(`    Only ${currentCount} accounts, no See all — skipping seed.`);
+      return [];
+    }
 
     // Occasional micro-pause (human behaviour)
     if (Math.random() < 0.05) {
