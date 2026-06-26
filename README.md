@@ -17,7 +17,7 @@ node scripts/fetch_similar_accounts_v3.mjs --auto-pipeline seed1 seed2 seed3
 
 | 步骤 | 命令 | 费用 |
 |------|------|------|
-| 1. 启动 Chrome CDP | `chrome --remote-debugging-port=9222` | 免费 |
+| 1. 启动 Chrome CDP | `python scripts/ensure_chrome_cdp.py`（自动） | 免费 |
 | 2. 提取类似达人 | `node scripts/fetch_similar_accounts_v3.mjs seed1 seed2` | 免费 |
 | 3. 筛选 | `python scripts/run_batch.py data/input_similar_combined.txt` | Apify 按量 |
 
@@ -78,6 +78,7 @@ icrush-influencer-mvp/
 ├── scripts/
 │   ├── run_batch.py            → Pipeline 主入口
 │   ├── fetch_similar_accounts_v3.mjs  → 类似账户提取（Node.js）
+│   ├── ensure_chrome_cdp.py    → Chrome CDP 自动生命周期管理
 │   ├── refresh_wednesday_cache.py     → 手动刷新缓存
 │   ├── fetch_batch.py          → 手动抓取 Apify dataset
 │   └── fetch_comments.py       → 手动抓取评论
@@ -94,6 +95,8 @@ icrush-influencer-mvp/
 
 ## 安装
 
+### 1. 克隆 + 依赖
+
 ```bash
 git clone https://github.com/Stevenchen213/icrush-influencer-mvp.git
 cd icrush-influencer-mvp
@@ -102,13 +105,41 @@ playwright install chromium
 npm install
 ```
 
-配置 `.env`：
-```
+### 2. 配置 `.env`
+
+复制 `.env.example`（如没有则新建），填入：
+
+```bash
+# === API Token ===
 APIFY_TOKEN=your_token_here
 WEDNESDAY_EMAIL=it@icrush.de
 WEDNESDAY_PASSWORD=xxx
 DEDUP_API_TOKEN=xxx
 DEDUP_API_URL=xxx
+
+# === Chrome CDP 路径（部署到新机器必须改） ===
+# Chrome 安装位置
+CHROME_EXE=C:\Program Files\Google\Chrome\Application\chrome.exe
+# 独立用户数据目录（存放 IG 登录态，Chrome 136+ 必须用独立目录）
+CHROME_USER_DATA=C:\Users\yaxua\chrome-debug
+# CDP 调试端口（默认 9222 即可）
+CDP_PORT=9222
+```
+
+> | 变量 | 说明 | 部署到新机器 |
+> |------|------|-------------|
+> | `CHROME_EXE` | Chrome 可执行文件路径 | **必须改**（路径不同） |
+> | `CHROME_USER_DATA` | 存放 IG 登录 session 的目录 | **必须改**（用户名不同） |
+> | `CDP_PORT` | 远程调试端口 | 一般不用改 |
+
+### 3. 初始化 IG 登录（新机器只需一次）
+
+```bash
+# 自动启动 Chrome CDP
+python scripts/ensure_chrome_cdp.py
+
+# 手动在打开的 Chrome 中登录 IG，session 自动持久化到 CHROME_USER_DATA
+# 此后每次运行 ensure_chrome_cdp.py 自动恢复 Chrome + 登录态
 ```
 
 ## 依赖
@@ -134,3 +165,9 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
   - 新增 `--auto-pipeline` 一键全自动
   - 删除 drissionpage 依赖
   - 配置文件精简
+- **v0.7.2** (2026-06-26)：
+  - Chrome CDP 根因修复：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
+  - 提取脚本三修复：See all 选择器 / 滚动容器 / 提前停止
+  - 新增 `ensure_chrome_cdp.py`：自动检测/启动/恢复 Chrome CDP
+  - 部署配置文档：README 安装步骤 + 路径变量说明
+  - 无 See all 时快速跳过（≤3 账号 → 6 次滚动后放弃）
