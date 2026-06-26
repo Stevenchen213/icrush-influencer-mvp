@@ -227,7 +227,10 @@ class Pipeline:
     async def _stage0_dedup(
         self, tt_users: list[str], ig_users: list[str]
     ) -> tuple[set[str], set[str]]:
-        """Check KOL 查重 API for all users. Returns sets of usernames to skip."""
+        """Check KOL 查重 API for all users. Returns sets of usernames to skip.
+
+        Runs up to DEDUP_CONCURRENCY parallel API calls to minimize wait time.
+        """
         dup_tt: set[str] = set()
         dup_ig: set[str] = set()
 
@@ -237,14 +240,22 @@ class Pipeline:
         if not all_users:
             return dup_tt, dup_ig
 
-        print(f"\n=== STAGE 0: KOL 查重（{len(all_users)} 人）===")
+        DEDUP_CONCURRENCY = 15  # Lambda can handle this comfortably
+        print(f"\n=== STAGE 0: KOL 查重（{len(all_users)} 人，{DEDUP_CONCURRENCY} 并发）===")
 
-        for username, platform, api_platform in all_users:
-            sys.stdout.write(f"  → {username} ... ")
-            sys.stdout.flush()
-            result = await check_dedup(username, api_platform)
+        sem = asyncio.Semaphore(DEDUP_CONCURRENCY)
+
+        async def check_one(username: str, platform: str, api_platform: str) -> tuple[str, str, dict]:
+            async with sem:
+                result = await check_dedup(username, api_platform)
+            return username, platform, result
+
+        tasks = [check_one(u, p, ap) for u, p, ap in all_users]
+        results = await asyncio.gather(*tasks)
+
+        for username, platform, result in results:
             if result["is_duplicate"]:
-                print(f"🚫 重复 → {result['summary']}")
+                print(f"  🚫 {username} → {result['summary']}")
                 if platform == "TT":
                     dup_tt.add(username)
                 else:
@@ -258,9 +269,9 @@ class Pipeline:
                     "reason": f"KOL查重: {result['summary']}",
                 }
             elif result.get("error"):
-                print(f"⚠️ {result['error']} → 放行")
+                print(f"  ⚠️ {username}: {result['error']} → 放行")
             else:
-                print("✅ 不重复")
+                print(f"  ✅ {username} → 不重复")
 
         dup_total = len(dup_tt) + len(dup_ig)
         if dup_total:
