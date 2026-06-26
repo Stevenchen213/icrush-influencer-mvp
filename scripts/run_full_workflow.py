@@ -73,9 +73,13 @@ def step_extract(seeds: list[str]) -> bool:
 
         cmd = [NODE, str(EXTRACT_SCRIPT), "--fast", *seeds]
         result = subprocess.run(
-            cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=600
+            cmd, cwd=str(ROOT), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=600,
         )
-        print(result.stdout.strip())
+        if result.stdout.strip():
+            print(result.stdout.strip())
+        if result.stderr.strip():
+            print(result.stderr.strip(), file=sys.stderr)
 
         if result.returncode == 0:
             log("Extraction complete.")
