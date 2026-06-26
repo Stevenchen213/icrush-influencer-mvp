@@ -753,7 +753,8 @@ class Pipeline:
 
             recent = [x for x in posts if x["createTime"] and
                       datetime.fromisoformat(x["createTime"].replace("Z", "+00:00")) > three_months_ago]
-            avg_views = round(sum(x["playCount"] for x in posts) / len(posts)) if posts else 0
+            source = recent if recent else posts  # prefer 3-month filter, fallback to all
+            avg_views = round(sum(x["playCount"] for x in source) / len(source)) if source else 0
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
             commercial_stats = analyze_commercial(posts, "TT", three_months_ago)
@@ -817,12 +818,15 @@ class Pipeline:
             wd_key = f"IG:{u}"
             wd = wednesday_data.get(wd_key, {"found": False})
 
-            videos = [
+            # Count ALL posts with view data (Video, Reel, or any post with play/view count > 0)
+            posts_with_views = [
                 x for x in posts
-                if (x.get("type") == "Video" or (x.get("videoPlayCount") and x.get("videoPlayCount", 0) > 0))
+                if (x.get("type") in ("Video", "Reel")
+                    or (x.get("videoPlayCount") or 0) > 0
+                    or (x.get("videoViewCount") or 0) > 0)
             ]
-            if videos:
-                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in videos]
+            if posts_with_views:
+                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in posts_with_views]
                 avg_views = round(sum(views_list) / len(views_list))
             else:
                 avg_views = 0
