@@ -68,6 +68,6 @@ FEISHU_RESULTS_TABLE_ID: str = os.environ.get("FEISHU_RESULTS_TABLE_ID", "")
 # === KOL 查重 API（实习生部署） ===
 DEDUP_API_URL: str = os.environ.get(
     "DEDUP_API_URL",
-    "https://xhyngnhrplbfhogbxzw2jz2mpm0uucmp.lambda-url.eu-central-1.on.aws/",
+    "https://fc-toolplatform-wlmnvexxpg.cn-hangzhou.fcapp.run/api/koc-dedup",
 )
 DEDUP_API_TOKEN: str = os.environ.get("DEDUP_API_TOKEN", "")
