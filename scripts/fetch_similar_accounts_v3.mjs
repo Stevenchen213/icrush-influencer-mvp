@@ -117,12 +117,28 @@ async function extractSimilarAccounts(page, seed, cfg) {
   const t0 = Date.now();
   console.log(`\n=== @${seed} ===`);
 
-  // Step 1: Navigate to profile
+  // Step 1: Navigate to profile (with retry)
   console.log("  [1/4] Loading profile...");
-  await page.goto(`https://www.instagram.com/${seed}/`, {
-    waitUntil: "networkidle",
-    timeout: 25000,
-  });
+  let loaded = false;
+  for (let retry = 0; retry < 3; retry++) {
+    try {
+      await page.goto(`https://www.instagram.com/${seed}/`, {
+        waitUntil: "networkidle",
+        timeout: 25000,
+      });
+      loaded = true;
+      break;
+    } catch (e) {
+      if (retry < 2) {
+        console.log(`    Retry ${retry + 1}/2: ${e.message.slice(0, 60)}...`);
+        await sleep(3000);
+      }
+    }
+  }
+  if (!loaded) {
+    console.log("  [!] Page failed to load after 3 retries — skipping seed");
+    return [];
+  }
   await sleep(jitter(cfg.pageLoadDelay, cfg.pageLoadJitter));
 
   // Step 2: Click "类似账户" / "Similar accounts"
