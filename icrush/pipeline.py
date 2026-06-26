@@ -21,12 +21,13 @@ from icrush.config import (
     VIEW_REPLACE,
 )
 from icrush.dedup import check_dedup
+from icrush.feishu import fetch_all_usernames, sync_to_feishu
 from icrush.judges import (
     judge_from_caption,
     short_circuit,
 )
 from icrush.language import detect_lang, detect_region, parse_url
-from icrush.report import build_markdown_table, build_stats, save_report
+from icrush.report import build_markdown_table, build_stats, next_report_filename, save_report
 from icrush.wednesday import (
     judge_gender,
     judge_wednesday_region,
@@ -105,7 +106,8 @@ class Pipeline:
         survivors_tt = len(tt_survivors)
         survivors_ig = len(ig_survivors)
 
-        filepath = save_report(
+        filepath, file_num = next_report_filename(len(input_order))
+        save_report(
             table=table,
             stats=stats,
             batch_size=len(input_order),
@@ -115,8 +117,16 @@ class Pipeline:
             survivors_ig=survivors_ig,
             warn_count=0,
             total_usd=total_usd,
+            filepath=filepath,
         )
         print(f"\n✓ 存档到 {filepath}")
+
+        # === 飞书 sync ===
+        synced = await sync_to_feishu(self.results, len(input_order), file_num)
+        if synced:
+            print("✓ 同步到飞书多维表格")
+        else:
+            print("⚠️ 飞书同步跳过或失败（不影响 pipeline 结果）")
 
     # ── helpers ──────────────────────────────────────────────────
 
@@ -276,6 +286,44 @@ class Pipeline:
         dup_total = len(dup_tt) + len(dup_ig)
         if dup_total:
             print(f"   📋 查重拦截 {dup_total} 人（已入库），跳过后续 pipeline")
+
+        # === 飞书结果表查重（与 KOL 查重并行生效）===
+        from icrush.config import FEISHU_SYNC_ENABLED, FEISHU_RESULTS_TABLE_ID
+        if FEISHU_SYNC_ENABLED and FEISHU_RESULTS_TABLE_ID:
+            feishu_usernames = await fetch_all_usernames()
+            if feishu_usernames:
+                for u in tt_users:
+                    key = f"TT:{u}"
+                    if key in feishu_usernames and u not in dup_tt:
+                        dup_tt.add(u)
+                        self.results[key] = {
+                            "platform": "TT", "name": u,
+                            "fans": None, "posts": None,
+                            "regionAccurate": "-", "avgViews": None,
+                            "genderFemale": None, "commercialStats": None,
+                            "verdict": "🟡 已入库",
+                            "reason": "飞书: 已有记录",
+                        }
+                for u in ig_users:
+                    key = f"IG:{u}"
+                    if key in feishu_usernames and u not in dup_ig:
+                        dup_ig.add(u)
+                        self.results[key] = {
+                            "platform": "IG", "name": u,
+                            "fans": None, "posts": None,
+                            "regionAccurate": "-", "avgViews": None,
+                            "genderFemale": None, "commercialStats": None,
+                            "verdict": "🟡 已入库",
+                            "reason": "飞书: 已有记录",
+                        }
+                feishu_hits = sum(
+                    1 for u in tt_users if f"TT:{u}" in feishu_usernames
+                ) + sum(
+                    1 for u in ig_users if f"IG:{u}" in feishu_usernames
+                )
+                if feishu_hits:
+                    print(f"   📋 飞书查重拦截 {feishu_hits} 人（已有记录）")
+
         return dup_tt, dup_ig
 
     # ── STAGE 1 ──────────────────────────────────────────────────

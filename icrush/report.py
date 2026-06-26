@@ -73,6 +73,17 @@ def build_stats(results: dict) -> str:
     return "\n".join(lines)
 
 
+def next_report_filename(batch_size: int) -> tuple[Path, int]:
+    """Return (filepath, file_num) for the next non-colliding report file."""
+    datestamp = datetime.now().strftime("%Y-%m-%d")
+    file_num = 1
+    while True:
+        filepath = RESULTS_DIR / f"{datestamp}_batch{batch_size}_{file_num}.md"
+        if not filepath.exists():
+            return filepath, file_num
+        file_num += 1
+
+
 def save_report(
     table: str,
     stats: str,
@@ -84,19 +95,17 @@ def save_report(
     warn_count: int,
     total_usd: float,
     usd_to_cny: float = 7.25,
+    *,
+    filepath: Path | None = None,
 ) -> Path:
     """Save the full report to a timestamped file in results/.
 
     Returns the path where the report was saved.
     """
-    datestamp = datetime.now().strftime("%Y-%m-%d")
-    file_num = 1
-    while True:
-        filepath = RESULTS_DIR / f"{datestamp}_batch{batch_size}_{file_num}.md"
-        if not filepath.exists():
-            break
-        file_num += 1
+    if filepath is None:
+        filepath, _ = next_report_filename(batch_size)
 
+    datestamp = datetime.now().strftime("%Y-%m-%d")
     short_circuited = (unique_tt + unique_ig) - (survivors_tt + survivors_ig)
 
     lines = [

@@ -60,6 +60,11 @@ FEISHU_BASE_ID: str = "TgzJbUV0taC8VVsOyndcUp69nEh"
 FEISHU_TABLE_ID: str = "tbl0vl4DSF0ChSjg"
 FEISHU_TOKEN: str = os.environ.get("FEISHU_TOKEN", "")
 
+# 飞书 results sync（需 FEISHU_SYNC_ENABLED=1 + FEISHU_RESULTS_TABLE_ID）
+FEISHU_SYNC_ENABLED: bool = os.environ.get("FEISHU_SYNC_ENABLED", "0") == "1"
+FEISHU_RESULTS_BASE_ID: str = os.environ.get("FEISHU_RESULTS_BASE_ID", FEISHU_BASE_ID)
+FEISHU_RESULTS_TABLE_ID: str = os.environ.get("FEISHU_RESULTS_TABLE_ID", "")
+
 # === KOL 查重 API（实习生部署） ===
 DEDUP_API_URL: str = os.environ.get(
     "DEDUP_API_URL",

@@ -118,7 +118,27 @@ function logSession(seedCount, accountCount) {
 // Core: extract similar accounts from one seed
 // ============================================================
 
+/**
+ * Sanitize a seed argument (full URL or bare username) to just the username.
+ */
+function sanitizeSeed(raw) {
+  // Strip protocol + domain if present
+  let s = raw.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  // instagram.com/username/... → username
+  const m = s.match(/^instagram\.com\/([a-zA-Z0-9._-]{2,30})/i);
+  if (m) return m[1];
+  // tiktok.com/@username/... → username (keep @ if present)
+  const ttm = s.match(/^tiktok\.com\/@?([a-zA-Z0-9._-]{2,30})/i);
+  if (ttm) return ttm[1];
+  // Remove trailing slashes/reels/posts
+  s = s.replace(/\/.*$/, "");
+  // Remove leading @ if present
+  s = s.replace(/^@/, "");
+  return s;
+}
+
 async function extractSimilarAccounts(page, seed, cfg) {
+  const username = sanitizeSeed(seed);
   const t0 = Date.now();
   console.log(`\n=== @${seed} ===`);
 
@@ -127,7 +147,7 @@ async function extractSimilarAccounts(page, seed, cfg) {
   let loaded = false;
   for (let retry = 0; retry < 3; retry++) {
     try {
-      await page.goto(`https://www.instagram.com/${seed}/`, {
+      await page.goto(`https://www.instagram.com/${username}/`, {
         waitUntil: "networkidle",
         timeout: 25000,
       });
@@ -295,7 +315,7 @@ async function extractSimilarAccounts(page, seed, cfg) {
     return [...found];
   });
 
-  let clean = links.filter(u => u !== seed.toLowerCase());
+  let clean = links.filter(u => u !== username.toLowerCase());
   if (loggedInUser) {
     clean = clean.filter(u => u !== loggedInUser);
   }
@@ -399,10 +419,11 @@ async function main() {
   // Save per-seed
   for (const [seed, accounts] of Object.entries(results)) {
     if (accounts.length > 0) {
-      const outPath = path.join(DATA_DIR, `similar_${seed}.txt`);
+      const safeName = sanitizeSeed(seed);
+      const outPath = path.join(DATA_DIR, `similar_${safeName}.txt`);
       const urls = accounts.map(u => `https://www.instagram.com/${u}/`);
       fs.writeFileSync(outPath, urls.join("\n") + "\n", "utf-8");
-      console.log(`  ${seed}: ${accounts.length} → similar_${seed}.txt`);
+      console.log(`  ${safeName}: ${accounts.length} → similar_${safeName}.txt`);
     }
   }
 
