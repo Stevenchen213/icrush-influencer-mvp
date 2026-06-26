@@ -298,13 +298,13 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                         }
                     return results
 
-                # Query each username
-                for username in usernames:
-                    sys.stdout.write(f"  → Wednesday 实时查询 {username} ... ")
-                    sys.stdout.flush()
-                    try:
-                        result = await page.evaluate("""async ({username, token}) => {
-                            // 1. Search by exact Instagram username
+                # Query all usernames in ONE page.evaluate with Promise.all
+                print(f"   🔍 并发查询 {len(usernames)} 人...")
+                batch_results = await page.evaluate("""async ({usernames, token}) => {
+                    // Reusable search logic for a single username
+                    async function searchOne(username) {
+                        try {
+                            const uLower = username.toLowerCase();
                             const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
                                 method: 'POST',
                                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -312,13 +312,11 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                             });
                             const sd = await sr.json();
                             const infs = sd.influencers || [];
-                            const uLower = username.toLowerCase();
 
-                            // 2. Fast path: match from search results' embedded instagrams/tiktoks
+                            // Fast path: match from search results' embedded instagrams/tiktoks
                             for (const inf of infs) {
                                 for (const ig of (inf.instagrams || [])) {
                                     if (ig.username?.toLowerCase() === uLower) {
-                                        // matched! fetch full profile for audience demographics
                                         return await fetchAudience(inf.id || inf.influencer_id, uLower, 'IG', token);
                                     }
                                 }
@@ -329,8 +327,7 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                                 }
                             }
 
-                            // 3. Slow path: search returned results but social accounts are empty.
-                            //    Fetch full profile for the top result to get its instagrams/tiktoks.
+                            // Slow path: fetch full profile for top results
                             for (const inf of infs.slice(0, 5)) {
                                 try {
                                     const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${inf.id || inf.influencer_id}`, {
@@ -338,80 +335,83 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                                     });
                                     const dd = await dr.json();
                                     for (const ig of (dd.instagrams || [])) {
-                                        if (ig.username?.toLowerCase() === uLower) {
-                                            return extractAudience(ig, inf.name, 'IG');
-                                        }
+                                        if (ig.username?.toLowerCase() === uLower) return extractAudience(ig, inf.name, 'IG');
                                     }
                                     for (const tt of (dd.tiktoks || [])) {
-                                        if (tt.username?.toLowerCase() === uLower) {
-                                            return extractAudience(tt, inf.name, 'TT');
-                                        }
+                                        if (tt.username?.toLowerCase() === uLower) return extractAudience(tt, inf.name, 'TT');
                                     }
                                 } catch (e) { /* try next */ }
                             }
 
                             return { found: false };
+                        } catch (e) {
+                            return { found: false, error: e.message };
+                        }
+                    }
 
-                            // Helper: fetch full profile, find the matching social account, extract audience
-                            async function fetchAudience(infId, uLower, via, token) {
-                                try {
-                                    const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${infId}`, {
-                                        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-                                    });
-                                    const dd = await dr.json();
-                                    for (const ig of (dd.instagrams || [])) {
-                                        if (ig.username?.toLowerCase() === uLower) return extractAudience(ig, dd.name, 'IG');
-                                    }
-                                    for (const tt of (dd.tiktoks || [])) {
-                                        if (tt.username?.toLowerCase() === uLower) return extractAudience(tt, dd.name, 'TT');
-                                    }
-                                    return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: dd.name, _matchedVia: via };
-                                } catch (e) {
-                                    return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: null, _matchedVia: via };
-                                }
+                    async function fetchAudience(infId, uLower, via, token) {
+                        try {
+                            const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${infId}`, {
+                                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+                            });
+                            const dd = await dr.json();
+                            for (const ig of (dd.instagrams || [])) {
+                                if (ig.username?.toLowerCase() === uLower) return extractAudience(ig, dd.name, 'IG');
                             }
-
-                            function extractAudience(med, name, via) {
-                                const aud = med?.audience || {};
-                                const g = aud?.gender_image_extractor?.values || null;
-                                const c = aud?.country_last_picture?.values || null;
-                                const ci = aud?.city_last_picture?.values || null;
-                                let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
-                                let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
-                                let dePct = 0, atPct = 0;
-                                if (c) {
-                                    if (c.DE) dePct = Math.round(c.DE * 10000) / 100;
-                                    if (c.AT) atPct = Math.round(c.AT * 10000) / 100;
-                                }
-                                return {
-                                    found: true,
-                                    gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
-                                    topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
-                                    topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
-                                    dePct: dePct,
-                                    atPct: atPct,
-                                    _matchedName: name,
-                                    _matchedVia: via,
-                                };
+                            for (const tt of (dd.tiktoks || [])) {
+                                if (tt.username?.toLowerCase() === uLower) return extractAudience(tt, dd.name, 'TT');
                             }
-                        }""", {"username": username, "token": token})
+                            return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: dd.name, _matchedVia: via };
+                        } catch (e) {
+                            return { found: true, gender: null, topCountry: null, topCity: null, dePct: 0, atPct: 0, _matchedName: null, _matchedVia: via };
+                        }
+                    }
 
-                        results[username] = result
-                        if result.get("found"):
-                            g = result.get("gender")
-                            g_str = f"女{g['female']}%" if g else "?"
-                            de_pct = result.get("dePct", 0) or 0
-                            at_pct = result.get("atPct", 0) or 0
-                            combined = de_pct + at_pct
-                            c_str = f" DE+AT={combined}%"
-                            via = result.get("_matchedVia", "?")
-                            print(f"✅ {g_str}{c_str} ({via})")
-                        else:
-                            print("❌ 无匹配")
+                    function extractAudience(med, name, via) {
+                        const aud = med?.audience || {};
+                        const g = aud?.gender_image_extractor?.values || null;
+                        const c = aud?.country_last_picture?.values || null;
+                        const ci = aud?.city_last_picture?.values || null;
+                        let tc = null, tcp = 0; if (c) Object.entries(c).forEach(([k, v]) => { if (v > tcp) { tcp = v; tc = k; } });
+                        let tci = null, tcip = 0; if (ci) Object.entries(ci).forEach(([k, v]) => { if (v > tcip) { tcip = v; tci = k; } });
+                        let dePct = 0, atPct = 0;
+                        if (c) {
+                            if (c.DE) dePct = Math.round(c.DE * 10000) / 100;
+                            if (c.AT) atPct = Math.round(c.AT * 10000) / 100;
+                        }
+                        return {
+                            found: true,
+                            gender: g ? { female: Math.round(g.female * 10000) / 100, male: Math.round(g.male * 10000) / 100 } : null,
+                            topCountry: tc ? { code: tc, pct: Math.round(tcp * 10000) / 100 } : null,
+                            topCity: tci ? { name: tci, pct: Math.round(tcip * 10000) / 100 } : null,
+                            dePct: dePct, atPct: atPct,
+                            _matchedName: name, _matchedVia: via,
+                        };
+                    }
 
-                    except Exception as e:
-                        results[username] = {"found": False, "error": str(e)}
-                        print(f"⚠️ {e}")
+                    // Run all searches in parallel
+                    const results = {};
+                    await Promise.all(usernames.map(async (username) => {
+                        results[username] = await searchOne(username);
+                    }));
+                    return results;
+                }""", {"usernames": usernames, "token": token})
+
+                # Process results
+                for username in usernames:
+                    result = batch_results.get(username, {"found": False})
+                    results[username] = result
+                    if result.get("found"):
+                        g = result.get("gender")
+                        g_str = f"女{g['female']}%" if g else "?"
+                        de_pct = result.get("dePct", 0) or 0
+                        at_pct = result.get("atPct", 0) or 0
+                        combined = de_pct + at_pct
+                        c_str = f" DE+AT={combined}%"
+                        via = result.get("_matchedVia", "?")
+                        print(f"  ✅ {username}: {g_str}{c_str} ({via})")
+                    else:
+                        print(f"  ❌ {username}: 无匹配")
 
                 # Save updated cache (stamp _lastAttempt on all entries for TTL)
                 now_ts = time.time()
