@@ -4,10 +4,13 @@
 
 ## 完整判定流程
 
-### STAGE 0：KOL 查重（新增）
-调用实习生部署的 Lambda API (`POST /`)，传入 `{account, platform}`:
+### STAGE 0：KOL 查重
+**主路径**：调用实习生部署的 Lambda API (`POST /`)，传入 `{account, platform}`:
 - 返回 `summary` 包含 "不重复" → 放行，继续 pipeline
 - 返回 `summary` 包含 "有重复" → 🟡 已入库，跳过后续（不消耗 Apify 费用）
+
+**补充路径**：飞书结果表查重（需 `FEISHU_SYNC_ENABLED=1`）
+- 拉取飞书"达人筛选结果"表中全部用户名，匹配命中 → 🟡 已入库
 
 ### STAGE 0.5：解析 URL
 提取 IG / TT 用户名，去重。

@@ -105,7 +105,7 @@ icrush/
   report.py                # Markdown 表格输出
   dedup.py                 # KOL 查重 API
   gender.py                # 头像性别检测（Claude Vision）
-  airtable.py / feishu.py # 排除名单 fallback
+  airtable.py / feishu.py # 排除名单 + 飞书结果同步（查重+append）
   apify.py                 # Apify API 客户端
   config.py                # 阈值常量
 
@@ -151,9 +151,10 @@ docs/
 - IG 为主，TT 也可以
 - 反目标：民族服饰 / 游戏 / 食物 / 亲子 / 炫富 / 品牌创始人 / 品牌官方号 / 宠物 / DIY
 
-### 查重机制（三重）
+### 查重机制（三重 → 四重）
 - Lambda API（主）：`POST {account, platform}` -> "有重复"则跳过
-- Airtable / 飞书（fallback）：lookup by username
+- 飞书结果表查重（新）：查询达人筛选结果表已有用户 → 命中则跳过
+- Airtable / 飞书排除名单（fallback）：lookup by username
 - 本地文件 `data/exclusion_list.json`
 
 ---
@@ -169,6 +170,9 @@ docs/
 - **端到端编排**：`run_full_workflow.py`（CDP→提取→pipeline，每阶段 3 次重试）
 - **部署支持**：`setup_first_time.bat` + `ensure_chrome_cdp.py` + `.env` 变量
 - **162人增量跑**：jamilaodonnell_ + jolinanaemii → 162 类似达人 → 71✅ 87❌ 3🟡 1✅
+- **飞书多维表格自动同步**：管道结果自动 append 到飞书（13字段），STAGE 0 飞书结果表查重
+- **URL 解析修复**：`fetch_similar_accounts_v3.mjs` 支持完整 URL 种子
+- **文件名兼容**：Windows 非法字符 (`:`) 修复
 
 ### 已验证案例
 - eva.waldenberger: 83 类似达人

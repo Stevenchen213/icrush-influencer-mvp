@@ -45,6 +45,7 @@ icrush/
   pipeline.py              # 三阶段编排（STAGE 0→1→1.5→2）
   judges.py / language.py / classifier.py / report.py
   wednesday.py / dedup.py / apify.py / config.py / gender.py
+  feishu.py                # 排除名单 + 结果同步（查重+append）
 
 scripts/
   run_batch.py             # Pipeline 主入口
@@ -62,16 +63,17 @@ docs/
 
 | Stage | 做什么 |
 |-------|--------|
-| STAGE 0 | KOL 查重 |
+| STAGE 0 | KOL 查重 + 飞书结果表查重 |
 | STAGE 1 | Profile + 短路淘汰 |
 | STAGE 1.5 | Wednesday 受众查询 |
 | STAGE 2 | 20 posts + 商单 → 通过/淘汰/置换/复查 |
+| 末尾 | 飞书多维表格自动同步 |
 
 ## 重要约定
 
 1. **获取达人 → `node scripts/fetch_similar_accounts_v3.mjs`**
 2. **用户贴 URL → `python scripts/run_batch.py`**
-3. 查重三重：Lambda API + Airtable/飞书 + exclusion_list.json
+3. 查重：Lambda API + 飞书结果表 + Airtable/飞书 + exclusion_list.json
 4. 偏好：白人年轻美女，时尚/穿搭/美妆/生活方式，有口播商单
 
 ## 当前状态（2026-06-26）
@@ -81,5 +83,6 @@ docs/
 - ✅ 端到端编排 `run_full_workflow.py`（CDP→提取→pipeline，含自动重试）
 - ✅ 提取三修复（See all 选择器 / 滚动容器 / 提前停止）
 - ✅ 部署文档 + `setup_first_time.bat` + `ensure_chrome_cdp.py`
+- ✅ 飞书多维表格自动同步（STAGE 0 查重 + 末尾 append，需 FEISHU_SYNC_ENABLED=1）
 - ⬜ Wednesday 配额重置后刷新缓存（7/1）
 - ⬜ 飞书 webhook 集成

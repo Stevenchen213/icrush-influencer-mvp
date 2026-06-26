@@ -55,9 +55,9 @@ AIRTABLE_TABLE_ID: str = "tbl8G3lCOugPLxNjr"
 AIRTABLE_TOKEN: str = os.environ.get("AIRTABLE_TOKEN", "")
 
 # 飞书 exclusion
-# Base: TgzJbUV0taC8VVsOyndcUp69nEh, Table: tbl0vl4DSF0ChSjg
-FEISHU_BASE_ID: str = "TgzJbUV0taC8VVsOyndcUp69nEh"
-FEISHU_TABLE_ID: str = "tbl0vl4DSF0ChSjg"
+# Base/Table: 通过环境变量配置，硬编码值仅作 fallback
+FEISHU_BASE_ID: str = os.environ.get("FEISHU_BASE_ID", "TgzJbUV0taC8VVsOyndcUp69nEh")
+FEISHU_TABLE_ID: str = os.environ.get("FEISHU_TABLE_ID", "tbl0vl4DSF0ChSjg")
 FEISHU_TOKEN: str = os.environ.get("FEISHU_TOKEN", "")
 
 # 飞书 results sync（需 FEISHU_SYNC_ENABLED=1 + FEISHU_RESULTS_TABLE_ID）

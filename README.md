@@ -41,12 +41,20 @@ node scripts/fetch_similar_accounts_v3.mjs --auto-pipeline seed1 seed2 seed3
 ## Pipeline 流程
 
 ```
-STAGE 0  → KOL 查重（Lambda API + 飞书 + 本地）
+STAGE 0  → KOL 查重（Lambda API + 飞书结果表）+ 本地排除名单
 STAGE 1  → Apify 抓 Profile → 短路淘汰
 STAGE 1.5 → Wednesday 受众查询（缓存优先，未命中自动实时查询）
 STAGE 2  → Apify 抓 20 posts → 浏览量 + caption 德语率 + 近3月商单
          → 最终判定 ✅/❌/🟡置换/🟡复查
+         → 飞书多维表格自动同步（需 FEISHU_SYNC_ENABLED=1）
 ```
+
+## 飞书多维表格自动同步
+
+开启 `FEISHU_SYNC_ENABLED=1` 后，管道跑完自动同步结果到飞书：
+- **STAGE 0**：查询飞书结果表已有用户 → 命中则"已入库"跳过
+- **管道末尾**：新结果 append 到多维表格（13 字段：用户名/平台/粉丝/帖数/地区/浏览量/女粉/Caption/商单/判定/原因/批次/日期/链接）
+- 同步失败不阻塞管道，关掉 `FEISHU_SYNC_ENABLED=0` 即可
 
 ## 判定矩阵
 
@@ -56,7 +64,7 @@ STAGE 2  → Apify 抓 20 posts → 浏览量 + caption 德语率 + 近3月商�
 | 全通过 + 无商单 | 🟡 复查 |
 | 粉丝 <10K 或 浏览 2K-4K | 🟡 置换组 |
 | bio DE + caption <25% | 🟡 复查 |
-| 查重命中 | 🟡 已入库 |
+| 查重命中（KOL API / 飞书结果表） | 🟡 已入库 |
 | 任一硬条件不满足 | ❌ 否 |
 
 ## 项目结构
