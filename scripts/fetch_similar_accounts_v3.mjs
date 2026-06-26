@@ -388,6 +388,7 @@ async function main() {
   }
 
   await page.close();
+  await browser.close();  // Disconnect CDP WebSocket so Node exits cleanly
 
   // Summary
   const total = [...allAccounts].length;
