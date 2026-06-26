@@ -224,6 +224,8 @@ async def main() -> None:
                     cache[username] = {"found": False, "error": str(e)}
                     print(f"⚠️ 异常: {e}")
 
+                await asyncio.sleep(1.0)  # Rate limit between queries
+
             save_cache(cache)
             print(f"\n💾 缓存已保存: {CACHE_FILE}")
             print(f"   共 {len(cache)} 条记录")

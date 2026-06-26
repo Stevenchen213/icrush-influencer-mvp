@@ -50,7 +50,6 @@ def detect_lang(text: str) -> str:
 
 def _match_boundary(word: str, text: str) -> bool:
     """Match word with word-boundary awareness (e.g. 'essen' won't match 'accessories')."""
-    import re
     return bool(re.search(r'(?<![a-z])' + re.escape(word) + r'(?![a-z])', text))
 
 
@@ -91,10 +90,6 @@ def detect_occupation(bio: str, category: str | None) -> str | None:
 
     if category and "artist" in (category.lower().split(",")[0] if category else ""):
         return "Artist"
-    if "(category|categoryname).*artist" and re.search(
-        r"(category|categoryname).*artist", text
-    ):
-        return "Artist"
 
     artist_re = re.compile(
         r"\b(künstler|künstlerin|maler|malerin|bildhauer|skulptur|"
@@ -116,7 +111,6 @@ def detect_male_by_name(full_name: str = "") -> str | None:
         return None
 
     # Remove non-alpha characters, split into tokens
-    import re
     tokens = re.split(r"[^a-zA-ZäöüÄÖÜß]+", full_name.lower().strip())
 
     male_hits = [t for t in tokens if t in MALE_FIRST_NAMES]

@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.7 (2026-06-24)
+**当前版本**：v0.7.2 (2026-06-26)
 
 ## 完整工作流
 
@@ -74,14 +74,18 @@ icrush-influencer-mvp/
 │   ├── apify.py                → Apify API 客户端
 │   ├── report.py               → Markdown 表格输出
 │   ├── config.py               → 阈值常量
+│   ├── gender.py               → 头像性别检测（Claude Vision）
 │   └── airtable.py / feishu.py → 排除名单 fallback
 ├── scripts/
 │   ├── run_batch.py            → Pipeline 主入口
+│   ├── run_full_workflow.py    → 端到端编排（CDP→提取→pipeline，含重试）
 │   ├── fetch_similar_accounts_v3.mjs  → 类似账户提取（Node.js）
 │   ├── ensure_chrome_cdp.py    → Chrome CDP 自动生命周期管理
 │   ├── refresh_wednesday_cache.py     → 手动刷新缓存
-│   ├── fetch_batch.py          → 手动抓取 Apify dataset
-│   └── fetch_comments.py       → 手动抓取评论
+│   ├── setup_first_time.bat    → 新机器 IG 登录初始化
+│   ├── fetch_batch.py          → 手动抓取 Apify dataset（旧，保留备用）
+│   ├── fetch_comments.py       → 手动抓取评论（旧，保留备用）
+│   └── extract_urls.py         → TT 评论 URL 提取器（旧，保留备用）
 ├── docs/
 │   ├── rules.md                → 完整规则文档
 │   └── similar_accounts_guide.md → 类似账户提取指南

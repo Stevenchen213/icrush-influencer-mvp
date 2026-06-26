@@ -357,13 +357,8 @@ class Pipeline:
                 sys.stdout.flush()
                 fallback = await self._scrape_ig_fallback(u)
                 if fallback:
-                    about_country = (fallback.get("about") or {}).get("country", "")
-                    if about_country == "Germany":
-                        region = {"region": "DE", "city": "about.country"}
-                    elif about_country == "Austria":
-                        region = {"region": "AT", "city": "about.country"}
-                    else:
-                        region = detect_region(fallback.get("biography", ""))
+                    # _scrape_ig_fallback doesn't return "about" — always use bio
+                    region = detect_region(fallback.get("biography", ""))
                     ig_profiles[u] = {
                         "name": fallback["username"],
                         "fullName": fallback.get("fullName", ""),
@@ -536,9 +531,11 @@ class Pipeline:
                         }
                         print(f"     🟡 {key}: Wednesday 登录失败 → 标记人工复查")
                         if platform == "TT":
-                            tt_survivors.remove(u)
+                            if u in tt_survivors:
+                                tt_survivors.remove(u)
                         else:
-                            ig_survivors.remove(u)
+                            if u in ig_survivors:
+                                ig_survivors.remove(u)
                     else:
                         print(f"  → {key}: ❌ 无缓存（Wednesday 未收录）→ 走原流程")
                         wednesday_data[key] = {"found": False}
@@ -579,9 +576,11 @@ class Pipeline:
                 }
                 print(f"     ❌ 地区不通过: {region_r['reason']}")
                 if platform == "TT":
-                    tt_survivors.remove(u)
+                    if u in tt_survivors:
+                        tt_survivors.remove(u)
                 else:
-                    ig_survivors.remove(u)
+                    if u in ig_survivors:
+                        ig_survivors.remove(u)
             elif not gender_r["pass"]:
                 self.results[key] = {
                     "platform": platform, "name": u,
@@ -594,9 +593,11 @@ class Pipeline:
                 }
                 print(f"     ❌ 性别不通过: {gender_r['reason']} (女粉 {female_str})")
                 if platform == "TT":
-                    tt_survivors.remove(u)
+                    if u in tt_survivors:
+                        tt_survivors.remove(u)
                 else:
-                    ig_survivors.remove(u)
+                    if u in ig_survivors:
+                        ig_survivors.remove(u)
             else:
                 de_pct = detail.get("dePct", 0) or 0
                 at_pct = detail.get("atPct", 0) or 0
@@ -757,12 +758,6 @@ class Pipeline:
             wd_key = f"IG:{u}"
             wd = wednesday_data.get(wd_key, {"found": False})
 
-            recent_videos = [
-                x for x in posts
-                if (x.get("type") == "Video" or (x.get("videoPlayCount") and x.get("videoPlayCount", 0) > 0))
-                and x.get("timestamp")
-                and datetime.fromisoformat(x["timestamp"].replace("Z", "+00:00")) > three_months_ago
-            ]
             videos = [
                 x for x in posts
                 if (x.get("type") == "Video" or (x.get("videoPlayCount") and x.get("videoPlayCount", 0) > 0))

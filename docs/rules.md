@@ -1,6 +1,6 @@
-# ICRUSH Influencer Vetting Pipeline — v0.7 Rules
+# ICRUSH Influencer Vetting Pipeline — v0.7.2 Rules
 
-> 最后更新: 2026-06-17
+> 最后更新: 2026-06-26
 
 ## 完整判定流程
 
@@ -46,8 +46,11 @@
 | 无 | ≥ 25% | ✅ 语言通过 |
 | 无 | < 25% | ❌ 淘汰 |
 
-### STAGE 2：Posts 抓取
+### STAGE 2：Posts 抓取 + 最终判定
 对存活者抓 20 条最新 posts，计算 caption 德语率、近3月平均浏览、商单分类。
+→ 输出最终判定（✅/❌/🟡置换/🟡复查）。
+
+> **STAGE 3（评论检查）已于 v0.7.1 移除** — 无实际价值，浪费 Apify 费用。
 
 ## 阈值
 

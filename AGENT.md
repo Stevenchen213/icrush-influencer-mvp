@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.7**
+当前版本：**v0.7.2**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -96,7 +96,7 @@ python scripts/run_batch.py data/input_similar_combined.txt
 
 ```
 icrush/
-  pipeline.py              # 四阶段编排
+  pipeline.py              # 三阶段编排（STAGE 0→1→1.5→2）
   judges.py                # 短路淘汰 + caption 判定
   language.py              # 语言检测、地区、职业、性别
   wordlists.py             # 词典
@@ -104,15 +104,19 @@ icrush/
   classifier.py            # 商单分类
   report.py                # Markdown 表格输出
   dedup.py                 # KOL 查重 API
+  gender.py                # 头像性别检测（Claude Vision）
   airtable.py / feishu.py # 排除名单 fallback
   apify.py                 # Apify API 客户端
   config.py                # 阈值常量
 
 scripts/
   run_batch.py             # 主入口（用户贴URL时永远用这个）
+  run_full_workflow.py     # 端到端编排（CDP→提取→pipeline，含重试）
   fetch_similar_accounts_v3.mjs  # 类似账户提取（唯一发现方法）
   ensure_chrome_cdp.py     # 自动管理 Chrome CDP 生命周期
   refresh_wednesday_cache.py     # 手动刷新 Wednesday 缓存
+  setup_first_time.bat     # 新机器 IG 登录初始化
+  extract_urls.py          # TT 评论 URL 提取器（STAGE 3 已废弃，保留备用）
 
 docs/
   rules.md                 # 完整规则
@@ -128,8 +132,7 @@ docs/
 | STAGE 0 | KOL 查重（Lambda API） | 已入库则跳过 |
 | STAGE 1 | Profile + 短路淘汰 | 命中即终止 |
 | STAGE 1.5 | Wednesday 受众查询 | - |
-| STAGE 2 | 20 条 posts + 商单 | - |
-| STAGE 3 | 评论 + 判定 | 通过/淘汰/置换/复查 |
+| STAGE 2 | 20 条 posts + 商单 | 通过/淘汰/置换/复查 |
 
 完整规则见 `docs/rules.md`
 
@@ -155,27 +158,27 @@ docs/
 
 ---
 
-## 当前会话状态（2026-06-25）
+## 当前会话状态（2026-06-26）
 
 ### 本会话完成
 - **Wednesday 地区规则调整**：DE+AT 合计 ≥35%（不再只看 DE）
-- **Wednesday 搜索修复**：两阶段匹配（快路径+慢路径），修复搜索结果 instagrams 为空导致漏查
+- **Wednesday 搜索修复**：两阶段匹配（快路径+慢路径）
 - **查重上线**：DEDUP_API_TOKEN 已配置，STAGE 0 生效
-- **135人重跑**：查重拦截 105 → 30 新人 → 7✅/11🟡/10❌/2置换
-  - Apify: $0.93（vs 昨天 $4.95，查重省了 80%）
-- **鲁棒性加固**：
-  - Wednesday 登录加重试（3次递增延迟）
-  - null 值防护：dePct/atPct 为 null 时重新查询而非当 0% 淘汰
-  - 缓存 TTL：found: false 条目 7 天后过期自动重试
-  - 登录失败标记：受影响用户标记 🟡 复查 + 注明原因
+- **鲁棒性加固**：Wednesday 登录重试、null 值防护、缓存 TTL、登录失败标记
+- **Chrome CDP 修复**：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
+- **端到端编排**：`run_full_workflow.py`（CDP→提取→pipeline，每阶段 3 次重试）
+- **部署支持**：`setup_first_time.bat` + `ensure_chrome_cdp.py` + `.env` 变量
+- **162人增量跑**：jamilaodonnell_ + jolinanaemii → 162 类似达人 → 71✅ 87❌ 3🟡 1✅
 
 ### 已验证案例
-- vanillaholica: 旧规则 ❌（DE 31.67%）→ 新规则 ✅（DE+AT 53.62%）
-- lissi.maria: 搜索漏查 → slow-path 修复后查到 DE+AT 77.7%
-- annalauraamenta/vickyheiler: 缓存 null → 修复后 ✅ 通过
+- eva.waldenberger: 83 类似达人
+- lilly.wls: 84 类似达人
+- jamilaodonnell_: 83 类似达人
+- jolinanaemii: 81 类似达人
+- vanillaholica: DE 31.67% → DE+AT 53.62% ✅
 
 ### 待办
-4. [ ] Wednesday 配额重置后刷新缓存（7/1）
-5. [x] 配置 DEDUP_API_TOKEN 启用查重 → **已完成**
-6. [ ] 每天 7-8 轮跑种子积累达人库
-7. [ ] GitHub push（网络/认证问题）
+- [ ] Wednesday 配额重置后刷新缓存（7/1）
+- [ ] 每天 7-8 轮跑种子积累达人库
+- [ ] GitHub push（网络/认证问题）
+- [ ] 飞书 webhook 集成（触发 run_full_workflow.py）

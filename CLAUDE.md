@@ -5,7 +5,7 @@
 
 ## 项目概况
 
-**ICRUSH v0.7** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+**ICRUSH v0.7.2** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
 
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
@@ -42,13 +42,16 @@ Python >=3.11 | httpx, langdetect, playwright, python-dotenv
 
 ```
 icrush/
-  pipeline.py              # 四阶段编排
+  pipeline.py              # 三阶段编排（STAGE 0→1→1.5→2）
   judges.py / language.py / classifier.py / report.py
-  wednesday.py / dedup.py / apify.py / config.py
+  wednesday.py / dedup.py / apify.py / config.py / gender.py
 
 scripts/
   run_batch.py             # Pipeline 主入口
+  run_full_workflow.py     # 端到端编排（CDP→提取→pipeline）
   fetch_similar_accounts_v3.mjs  # 类似账户提取（唯一发现方法）
+  ensure_chrome_cdp.py     # Chrome CDP 生命周期管理
+  setup_first_time.bat     # 新机器 IG 登录初始化
 
 docs/
   rules.md                 # 完整规则
@@ -62,8 +65,7 @@ docs/
 | STAGE 0 | KOL 查重 |
 | STAGE 1 | Profile + 短路淘汰 |
 | STAGE 1.5 | Wednesday 受众查询 |
-| STAGE 2 | 20 posts + 商单 |
-| STAGE 3 | 评论 + 判定 → 通过/淘汰/置换/复查 |
+| STAGE 2 | 20 posts + 商单 → 通过/淘汰/置换/复查 |
 
 ## 重要约定
 
@@ -72,9 +74,12 @@ docs/
 3. 查重三重：Lambda API + Airtable/飞书 + exclusion_list.json
 4. 偏好：白人年轻美女，时尚/穿搭/美妆/生活方式，有口播商单
 
-## 当前状态（2026-06-24）
+## 当前状态（2026-06-26）
 
 - ✅ IG 类似账户三步法验证成功，整合为唯一发现方法
-- ✅ 项目清理：删除所有旧发现方法，仅保留 pipeline + 类似账户提取
-- ⬜ Apify 充值后恢复 pipeline
-- ⬜ Wednesday 配额重置（7/1）
+- ✅ Chrome CDP 根因修复（`--user-data-dir` 兼容 Chrome 136+）
+- ✅ 端到端编排 `run_full_workflow.py`（CDP→提取→pipeline，含自动重试）
+- ✅ 提取三修复（See all 选择器 / 滚动容器 / 提前停止）
+- ✅ 部署文档 + `setup_first_time.bat` + `ensure_chrome_cdp.py`
+- ⬜ Wednesday 配额重置后刷新缓存（7/1）
+- ⬜ 飞书 webhook 集成

@@ -21,8 +21,13 @@ import { chromium } from "playwright";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const DATA_DIR = "C:\\Users\\yaxua\\icrush-influencer-mvp\\data";
+// Resolve project root relative to this script (works on any machine)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = process.env.ICRUSH_ROOT || path.resolve(__dirname, "..");
+const DATA_DIR = path.join(PROJECT_ROOT, "data");
 const SESSION_LOG = path.join(DATA_DIR, "session_log.json");
 
 // ============================================================
@@ -423,9 +428,9 @@ async function main() {
     console.log("Auto-pipeline: feeding into run_batch.py...");
     console.log(`${"=".repeat(50)}`);
 
-    const pythonPath = "C:\\Users\\yaxua\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
+    const pythonPath = process.env.PYTHON_EXE || "python";
     const proc = spawn(pythonPath, ["scripts/run_batch.py", combinedPath], {
-      cwd: "C:\\Users\\yaxua\\icrush-influencer-mvp",
+      cwd: PROJECT_ROOT,
       stdio: "inherit",
       env: { ...process.env, PYTHONIOENCODING: "utf-8" },
     });

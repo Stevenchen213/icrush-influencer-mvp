@@ -11,14 +11,12 @@ from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError
 
-# Load from .env or use defaults
-import os as _os
 from dotenv import load_dotenv
 load_dotenv()
 
-CHROME_EXE = _os.getenv("CHROME_EXE", r"C:\Program Files\Google\Chrome\Application\chrome.exe")
-CHROME_USER_DATA = _os.getenv("CHROME_USER_DATA", r"C:\Users\yaxua\chrome-debug")
-CDP_PORT = int(_os.getenv("CDP_PORT", "9222"))
+CHROME_EXE = os.getenv("CHROME_EXE", r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+CHROME_USER_DATA = os.getenv("CHROME_USER_DATA") or os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "chrome-debug")
+CDP_PORT = int(os.getenv("CDP_PORT", "9222"))
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 
 
@@ -33,23 +31,13 @@ def is_cdp_alive():
         return False
 
 
-def is_ig_logged_in():
-    """Check if IG is logged in by looking for session cookie."""
-    try:
-        req = Request(f"{CDP_URL}/json")
-        with urlopen(req, timeout=3) as resp:
-            tabs = json.loads(resp.read())
-        # Find an IG tab and check its cookies via CDP
-        for tab in tabs:
-            if "instagram.com" in tab.get("url", ""):
-                return True
-        return False
-    except Exception:
-        return False
-
-
 def kill_chrome():
-    """Kill all Chrome processes."""
+    """Kill all Chrome processes.
+
+    WARNING: This kills ALL Chrome windows, including normal browsing sessions.
+    On Windows there is no clean way to kill only the CDP instance via taskkill.
+    TODO: Use CDP's /json endpoint to find the CDP Chrome PID and kill only that.
+    """
     try:
         subprocess.run(
             ["taskkill", "/F", "/IM", "chrome.exe"],

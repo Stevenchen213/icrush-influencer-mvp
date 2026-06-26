@@ -30,7 +30,11 @@ async def main() -> None:
     if args.input == "-":
         text = sys.stdin.read()
     else:
-        text = Path(args.input).read_text(encoding="utf-8")
+        input_path = Path(args.input)
+        if not input_path.exists():
+            print(f"❌ 文件不存在: {args.input}")
+            sys.exit(1)
+        text = input_path.read_text(encoding="utf-8")
 
     client = ApifyClient()
     try:

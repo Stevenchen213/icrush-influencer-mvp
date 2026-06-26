@@ -16,7 +16,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parent.parent
-PYTHON = os.getenv("PYTHON_EXE", r"C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe")
+PYTHON = os.getenv("PYTHON_EXE") or sys.executable
 NODE = "node"
 CDP_URL = "http://127.0.0.1:9222"
 EXTRACT_SCRIPT = ROOT / "scripts" / "fetch_similar_accounts_v3.mjs"
@@ -90,7 +90,9 @@ def step_extract(seeds: list[str]) -> bool:
                 else:
                     log("0 accounts extracted (all seeds skipped).")
                     return False  # Not a failure, just no results
-            return True
+            else:
+                log(f"Extraction claimed success but {COMBINED_INPUT} not found.")
+                return False
 
         log(f"Extraction failed (exit {result.returncode}), stderr: {result.stderr[:200]}")
         if attempt < MAX_RETRIES - 1:
@@ -128,11 +130,24 @@ def step_pipeline() -> bool:
 
 
 def main():
-    seeds = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # Parse args — separate flags from seed usernames
+    args = sys.argv[1:]
+    seeds: list[str] = []
     max_retries_override = None
-    for i, arg in enumerate(sys.argv[1:]):
-        if arg == "--max-retries" and i + 1 < len(sys.argv) - 1:
-            max_retries_override = int(sys.argv[i + 2])
+    i = 0
+    while i < len(args):
+        if args[i] == "--max-retries" and i + 1 < len(args):
+            try:
+                max_retries_override = int(args[i + 1])
+            except ValueError:
+                print(f"Invalid --max-retries value: {args[i+1]}")
+                sys.exit(1)
+            i += 2
+        elif not args[i].startswith("--"):
+            seeds.append(args[i])
+            i += 1
+        else:
+            i += 1
 
     global MAX_RETRIES
     if max_retries_override:
