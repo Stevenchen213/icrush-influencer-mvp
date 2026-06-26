@@ -49,22 +49,37 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 脚本：`scripts/fetch_similar_accounts_v3.mjs`
 文档：`docs/similar_accounts_guide.md`
 
-### 日常流程
+### 日常流程（自动 / 手动）
 
 ```bash
-# 1. 关闭所有 Chrome 窗口，等 15 秒（确保后台进程退干净）
-# 2. 用独立 user-data-dir 启动（必须，Chrome 136+ 安全限制）
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir=C:\Users\yaxua\chrome-debug
+# === 自动化 ===
+# 脚本会自动检测并启动 Chrome CDP（飞书触发时也可以用）
+python scripts/ensure_chrome_cdp.py
 
-# 3. 如果首次使用 chrome-debug 目录，需登录 IG（一次性的）
-# 4. 提取类似达人
+# === 半自动 ===
+# 提取（安全模式，每次最多 5 种子）
 node scripts/fetch_similar_accounts_v3.mjs seed1 seed2
 
-# 5. 喂入 pipeline
+# 喂入 pipeline
 python scripts/run_batch.py data/input_similar_combined.txt
+
+# === 手动备选 ===
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir=C:\Users\yaxua\chrome-debug
 ```
 
-> ⚠️ **必须用 `--user-data-dir`，不能用 `--profile-directory`**：Chrome 136+ 使用默认 User Data 目录时会忽略 `--remote-debugging-port`（2026-06-25 排查确认）。
+> ⚠️ **必须用 `--user-data-dir`**：Chrome 136+ 忽略默认目录的 `--remote-debugging-port`（2026-06-25 排查确认）。
+
+### 部署到新机器
+
+1. `git clone` + `pip install -r requirements.txt` + `npm install`
+2. 复制 `.env.example` → `.env`，修改路径：
+   ```
+   CHROME_EXE=C:\Program Files\Google\Chrome\Application\chrome.exe
+   CHROME_USER_DATA=C:\Users\yaxua\chrome-debug
+   CDP_PORT=9222
+   ```
+3. 手动运行一次 Chrome CDP 启动命令，登录 IG（session 持久化在 chrome-debug 目录）
+4. 此后 `ensure_chrome_cdp.py` 自动管理 Chrome 生命周期
 
 ### 安全策略
 
@@ -96,6 +111,7 @@ icrush/
 scripts/
   run_batch.py             # 主入口（用户贴URL时永远用这个）
   fetch_similar_accounts_v3.mjs  # 类似账户提取（唯一发现方法）
+  ensure_chrome_cdp.py     # 自动管理 Chrome CDP 生命周期
   refresh_wednesday_cache.py     # 手动刷新 Wednesday 缓存
 
 docs/
