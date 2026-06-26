@@ -50,6 +50,7 @@ async def check_dedup(username: str, platform: str = "Instagram") -> dict:
                     "account": username,
                     "platform": platform,
                     "developer_name": "陈铭嵩",
+                    "check_only": True,  # 只查重，不写入 KOL 总表
                 },
             )
 

@@ -158,7 +158,7 @@ def _build_fields(
         "近三月平均浏览量": r.get("avgViews"),
         "女粉占比": r.get("genderFemale"),
         "Caption德语占比": r.get("_captionDePct"),
-        "达人链接": f"https://www.instagram.com/{r.get('name', '')}/" if r.get("platform") == "IG" else f"https://www.tiktok.com/@{r.get('name', '')}",
+        "达人链接": {"link": f"https://www.instagram.com/{r.get('name', '')}/"} if r.get("platform") == "IG" else {"link": f"https://www.tiktok.com/@{r.get('name', '')}"},
         "近3月商单": format_commercial_stats(r.get("commercialStats")),
         "判定结果": r.get("verdict", ""),
         "原因": r.get("reason", ""),
@@ -190,7 +190,13 @@ async def _batch_create(
         try:
             resp = await client.post(url, json=payload, headers=headers)
             if resp.status_code != 200:
+                print(f"  ⚠️ Feishu batch_create HTTP {resp.status_code}: {resp.text[:200]}")
                 all_ok = False
+            else:
+                body = resp.json()
+                if body.get("code", 0) != 0:
+                    print(f"  ⚠️ Feishu API error {body.get('code')}: {body.get('msg','')[:200]}")
+                    all_ok = False
         except Exception:
             all_ok = False
 

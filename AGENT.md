@@ -132,7 +132,7 @@ docs/
 | STAGE 0 | KOL 查重（Lambda API） | 已入库则跳过 |
 | STAGE 1 | Profile + 短路淘汰 | 命中即终止 |
 | STAGE 1.5 | Wednesday 受众查询 | - |
-| STAGE 2 | 20 条 posts + 商单 | 通过/淘汰/置换/复查 |
+| STAGE 2 | IG: 100条→过滤Reel/Video→最近20条 / TT: 20条→3月过滤 | 通过/淘汰/置换/复查 |
 
 完整规则见 `docs/rules.md`
 
@@ -151,9 +151,9 @@ docs/
 - IG 为主，TT 也可以
 - 反目标：民族服饰 / 游戏 / 食物 / 亲子 / 炫富 / 品牌创始人 / 品牌官方号 / 宠物 / DIY
 
-### 查重机制（三重 → 四重）
-- Lambda API（主）：`POST {account, platform}` -> "有重复"则跳过
-- 飞书结果表查重（新）：查询达人筛选结果表已有用户 → 命中则跳过
+### 查重机制（四重）
+- 阿里云 API（主）：`POST {account, platform, developer_name, check_only: true}` → 对比 4 库（KOL总表/KOC红人库/实习生表/AWS KOC），只查不写
+- 飞书结果表查重：查询达人筛选结果表已有用户 → 命中则跳过
 - Airtable / 飞书排除名单（fallback）：lookup by username
 - 本地文件 `data/exclusion_list.json`
 
@@ -170,8 +170,12 @@ docs/
 - **端到端编排**：`run_full_workflow.py`（CDP→提取→pipeline，每阶段 3 次重试）
 - **部署支持**：`setup_first_time.bat` + `ensure_chrome_cdp.py` + `.env` 变量
 - **162人增量跑**：jamilaodonnell_ + jolinanaemii → 162 类似达人 → 71✅ 87❌ 3🟡 1✅
-- **飞书多维表格自动同步**：管道结果自动 append 到飞书（13字段），STAGE 0 飞书结果表查重
-- **URL 解析修复**：`fetch_similar_accounts_v3.mjs` 支持完整 URL 种子
+- **飞书多维表格自动同步**：管道结果自动 append 到飞书（14字段含达人链接），STAGE 0 飞书结果表查重，URL 字段 `{link}` 格式修复
+- **查重 API 迁移**：Lambda → 阿里云，4 库查重（KOL总表/KOC红人库/实习生表/AWS KOC），`check_only: true` 只查不写
+- **IG 浏览量修复**：STAGE 2 抓 100 条 → 过滤 Reel/Video → 取最近 20 条计算 avgViews，解决图文博主浏览量=0 问题
+- **Wednesday 搜索修复**：`field: 'all'` 全字段搜索（去 `@` 前缀）
+- **TT 浏览量修复**：近 3 月过滤实际生效（之前计算了 `recent` 但从未使用）
+- **URL 解析修复**：`fetch_similar_accounts_v3.mjs` 支持完整 URL 种子（`sanitizeSeed`）
 - **文件名兼容**：Windows 非法字符 (`:`) 修复
 
 ### 已验证案例

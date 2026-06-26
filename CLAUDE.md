@@ -63,10 +63,10 @@ docs/
 
 | Stage | 做什么 |
 |-------|--------|
-| STAGE 0 | KOL 查重 + 飞书结果表查重 |
+| STAGE 0 | KOL 查重（阿里云 4 库，check_only）+ 飞书结果表查重 |
 | STAGE 1 | Profile + 短路淘汰 |
-| STAGE 1.5 | Wednesday 受众查询 |
-| STAGE 2 | 20 posts + 商单 → 通过/淘汰/置换/复查 |
+| STAGE 1.5 | Wednesday 受众查询（field:all 全字段搜索） |
+| STAGE 2 | IG: 100→Reel/Video×20 / TT: 20→3月过滤 + 商单 |
 | 末尾 | 飞书多维表格自动同步 |
 
 ## 重要约定
@@ -83,6 +83,9 @@ docs/
 - ✅ 端到端编排 `run_full_workflow.py`（CDP→提取→pipeline，含自动重试）
 - ✅ 提取三修复（See all 选择器 / 滚动容器 / 提前停止）
 - ✅ 部署文档 + `setup_first_time.bat` + `ensure_chrome_cdp.py`
-- ✅ 飞书多维表格自动同步（STAGE 0 查重 + 末尾 append，需 FEISHU_SYNC_ENABLED=1）
+- ✅ 飞书多维表格自动同步（STAGE 0 查重 + 末尾 append，14 字段含达人链接）
+- ✅ 查重 API 迁移阿里云（4 库，check_only 只查不写）
+- ✅ IG 浏览量修复（100 条 → 过滤 Reel/Video → 最近 20 条）
+- ✅ Wednesday 搜索修复（field:all）+ TT 3 月过滤修复
 - ⬜ Wednesday 配额重置后刷新缓存（7/1）
 - ⬜ 飞书 webhook 集成

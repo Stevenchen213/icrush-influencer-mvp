@@ -5,7 +5,10 @@
 ## 完整判定流程
 
 ### STAGE 0：KOL 查重
-**主路径**：调用实习生部署的 Lambda API (`POST /`)，传入 `{account, platform}`:
+
+**主路径**：调用阿里云查重 API，传入 `{account, platform, developer_name, check_only: true}`：
+- `check_only: true` → 只查不写，不会自动录入 KOL 总表
+- 内部对比 4 个库：KOL博主记录总表 / KOC红人库 / 实习生KOL查重表 / AWS KOC数据库
 - 返回 `summary` 包含 "不重复" → 放行，继续 pipeline
 - 返回 `summary` 包含 "有重复" → 🟡 已入库，跳过后续（不消耗 Apify 费用）
 
@@ -33,6 +36,7 @@
 
 ### STAGE 1.5：Wednesday 受众查询
 
+搜索策略：`field: 'all'` 全字段搜索（用户名/显示名均可命中）
 ```
 缓存命中 → 直接用 ✅
 缓存未命中 → 自动 Playwright 实时查询 → 存入缓存
@@ -50,7 +54,15 @@
 | 无 | < 25% | ❌ 淘汰 |
 
 ### STAGE 2：Posts 抓取 + 最终判定
-对存活者抓 20 条最新 posts，计算 caption 德语率、近3月平均浏览、商单分类。
+
+**IG**：抓取最近 100 条帖子 → 过滤仅保留 Reel/Video → 取最近 20 条
+- 平均浏览量：基于这 20 条 Reel/Video 的播放量计算
+- 商单分类：基于同一批 Reel/Video 的 caption 分析
+- 如无任何 Reel/Video，avgViews=0，商单 fallback 到最近 20 条普通帖子
+
+**TT**：抓取 20 条视频 → 近 3 月内视频优先 → 不足则 fallback 到全部
+- 平均浏览量：基于筛选后视频的 playCount
+
 → 输出最终判定（✅/❌/🟡置换/🟡复查）。
 
 > **STAGE 3（评论检查）已于 v0.7.1 移除** — 无实际价值，浪费 Apify 费用。

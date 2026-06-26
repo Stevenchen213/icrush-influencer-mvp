@@ -701,12 +701,14 @@ class Pipeline:
             ))
 
         if ig_survivors:
-            print(f"  → IG post-scraper detailedData, {POSTS_LIMIT} posts ×{len(ig_survivors)}")
+            # Fetch up to 100 posts to find enough Reels/Videos for a reliable view average
+            ig_fetch_limit = max(100, POSTS_LIMIT)
+            print(f"  → IG post-scraper detailedData, up to {ig_fetch_limit} posts ×{len(ig_survivors)} (filter to {POSTS_LIMIT} Reels/Videos)")
             tasks.append(asyncio.create_task(
                 self._start_and_fetch(ACTOR_IG_POSTS, {
                     "username": ig_survivors,
                     "dataDetailLevel": "detailedData",
-                    "resultsLimit": POSTS_LIMIT,
+                    "resultsLimit": ig_fetch_limit,
                     "skipPinnedPosts": False,
                 }, kind="ig-posts")
             ))
@@ -818,21 +820,24 @@ class Pipeline:
             wd_key = f"IG:{u}"
             wd = wednesday_data.get(wd_key, {"found": False})
 
-            # Count ALL posts with view data (Video, Reel, or any post with play/view count > 0)
-            posts_with_views = [
+            # Filter to only Reels/Videos (has view data), keep up to POSTS_LIMIT most recent
+            reels_videos = [
                 x for x in posts
                 if (x.get("type") in ("Video", "Reel")
                     or (x.get("videoPlayCount") or 0) > 0
                     or (x.get("videoViewCount") or 0) > 0)
-            ]
-            if posts_with_views:
-                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in posts_with_views]
+            ][:POSTS_LIMIT]
+
+            if reels_videos:
+                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in reels_videos]
                 avg_views = round(sum(views_list) / len(views_list))
+                posts_for_commercial = reels_videos  # commercial analysis on same reel/video set
             else:
                 avg_views = 0
+                posts_for_commercial = posts[:POSTS_LIMIT]  # fallback to recent posts for commercial check
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
-            commercial_stats = analyze_commercial(posts, "IG", three_months_ago)
+            commercial_stats = analyze_commercial(posts_for_commercial, "IG", three_months_ago)
 
             if wd.get("found") and wd.get("regionPass") and wd.get("genderPass"):
                 region_acc = "是 (Wednesday)"
