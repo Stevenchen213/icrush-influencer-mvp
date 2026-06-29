@@ -7,8 +7,11 @@ ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人�
 ## 完整工作流
 
 ```bash
-# 一条命令：发现 + 筛选全自动
-node scripts/fetch_similar_accounts_v3.mjs --auto-pipeline seed1 seed2 seed3
+# 批量种子（逐个安全模式）
+python scripts/_run_seeds_one_by_one.py  # 读取 data/batch_72.txt，逐个跑完
+
+# 单个种子
+python scripts/run_full_workflow.py seed1
 
 # 输出：results/YYYY-MM-DD_batchN_seq.md（Markdown 报表）
 ```
