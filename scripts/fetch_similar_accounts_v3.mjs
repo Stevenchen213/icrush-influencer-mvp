@@ -46,7 +46,7 @@ const SAFE = {
   clickDelayJitter: 1500,
   pageLoadDelay: 3000,
   pageLoadJitter: 2000,
-  maxSeedsPerSession: 5,  // ~400 candidates, pipeline filters to ~50-80
+  maxSeedsPerSession: 100,  // batch mode — run all seeds with safety delays
 };
 
 const FAST = {

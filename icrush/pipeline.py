@@ -702,16 +702,20 @@ class Pipeline:
 
         if ig_survivors:
             # Fetch up to 100 posts to find enough Reels/Videos for a reliable view average
+            # Split into 3 batches to balance speed vs Apify rate limit
             ig_fetch_limit = max(100, POSTS_LIMIT)
-            print(f"  → IG post-scraper detailedData, up to {ig_fetch_limit} posts ×{len(ig_survivors)} (filter to {POSTS_LIMIT} Reels/Videos)")
-            tasks.append(asyncio.create_task(
-                self._start_and_fetch(ACTOR_IG_POSTS, {
-                    "username": ig_survivors,
-                    "dataDetailLevel": "detailedData",
-                    "resultsLimit": ig_fetch_limit,
-                    "skipPinnedPosts": False,
-                }, kind="ig-posts")
-            ))
+            IG_BATCH = max(1, len(ig_survivors) // 3 + (1 if len(ig_survivors) % 3 else 0))
+            ig_batches = [ig_survivors[i:i + IG_BATCH] for i in range(0, len(ig_survivors), IG_BATCH)]
+            print(f"  → IG post-scraper detailedData, up to {ig_fetch_limit} posts ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
+            for batch in ig_batches:
+                tasks.append(asyncio.create_task(
+                    self._start_and_fetch(ACTOR_IG_POSTS, {
+                        "username": batch,
+                        "dataDetailLevel": "detailedData",
+                        "resultsLimit": ig_fetch_limit,
+                        "skipPinnedPosts": False,
+                    }, kind="ig-posts")
+                ))
 
         results_list = await asyncio.gather(*tasks)
 

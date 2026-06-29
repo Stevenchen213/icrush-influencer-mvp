@@ -71,10 +71,10 @@ def step_extract(seeds: list[str]) -> bool:
             if not step_ensure_cdp():
                 return False
 
-        cmd = [NODE, str(EXTRACT_SCRIPT), "--fast", *seeds]
+        cmd = [NODE, str(EXTRACT_SCRIPT), *seeds]
         result = subprocess.run(
             cmd, cwd=str(ROOT), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=600,
+            encoding="utf-8", errors="replace", timeout=7200,
         )
         if result.stdout.strip():
             print(result.stdout.strip())
@@ -123,9 +123,14 @@ def step_pipeline() -> bool:
     log(f"Running pipeline on {count} accounts...")
     result = subprocess.run(
         [PYTHON, str(RUN_BATCH), str(COMBINED_INPUT)],
-        cwd=str(ROOT), text=True, timeout=3600  # pipeline can take a while
+        cwd=str(ROOT), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=7200,
     )
-    # Pipeline streams output directly, so we don't capture
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip(), file=sys.stderr)
+
     if result.returncode == 0:
         log("Pipeline complete.")
         return True
