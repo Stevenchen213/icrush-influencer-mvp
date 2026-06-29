@@ -333,13 +333,38 @@ class Pipeline:
     ) -> tuple[dict, dict]:
         """Fetch profile metadata via Apify Actors."""
         print("\n=== STAGE 1: profile metadata（短路用）===")
+
+        from icrush.apify_cache import cache_key, get_cached, set_cache, is_cache_enabled
+
+        # ── Check cache before Apify ──
+        cached_tt: dict[str, dict] = {}
+        cached_ig: dict[str, dict] = {}
+        uncached_tt = list(tt_users)
+        uncached_ig = list(ig_users)
+
+        if is_cache_enabled():
+            for u in list(uncached_tt):
+                data = get_cached(cache_key("profile", "TT", u))
+                if data:
+                    cached_tt[u] = data
+                    uncached_tt.remove(u)
+            for u in list(uncached_ig):
+                data = get_cached(cache_key("profile", "IG", u))
+                if data:
+                    cached_ig[u] = data
+                    uncached_ig.remove(u)
+            hits = len(cached_tt) + len(cached_ig)
+            total = len(tt_users) + len(ig_users)
+            if hits:
+                print(f"  [cache] profiles: {hits}/{total} hits ({len(uncached_tt)} TT + {len(uncached_ig)} IG remaining)")
+
         tasks: list[asyncio.Task] = []
 
-        if tt_users:
-            print(f"  → TT clockworks profile-only (resultsPerPage=1) ×{len(tt_users)}")
+        if uncached_tt:
+            print(f"  → TT clockworks profile-only (resultsPerPage=1) ×{len(uncached_tt)}")
             tasks.append(asyncio.create_task(
                 self._start_and_fetch(ACTOR_TT_PROFILE, {
-                    "profiles": tt_users,
+                    "profiles": uncached_tt,
                     "profileScrapeSections": ["videos"],
                     "profileSorting": "latest",
                     "resultsPerPage": 1,
@@ -350,11 +375,11 @@ class Pipeline:
                 }, kind="tt-profile")
             ))
 
-        if ig_users:
-            print(f"  → IG profile-scraper ×{len(ig_users)}")
+        if uncached_ig:
+            print(f"  → IG profile-scraper ×{len(uncached_ig)}")
             tasks.append(asyncio.create_task(
                 self._start_and_fetch(ACTOR_IG_PROFILE, {
-                    "usernames": ig_users,
+                    "usernames": uncached_ig,
                     "includeAboutSection": True,
                 }, kind="ig-profile")
             ))
@@ -407,8 +432,15 @@ class Pipeline:
                         "latestPosts": p.get("latestPosts", []),
                     }
 
+        # ── Save fresh profile results to cache ──
+        if is_cache_enabled():
+            for name, profile in tt_profiles.items():
+                set_cache(cache_key("profile", "TT", name), profile)
+            for name, profile in ig_profiles.items():
+                set_cache(cache_key("profile", "IG", name), profile)
+
         # Playwright fallback for IG users Apify missed
-        missed_ig = [u for u in ig_users if u not in ig_profiles]
+        missed_ig = [u for u in uncached_ig if u not in ig_profiles]
         if missed_ig:
             print(f"\n   🔄 Apify 漏了 {len(missed_ig)} 个 IG 账号，Playwright 兜底...")
             for u in missed_ig:
@@ -418,7 +450,7 @@ class Pipeline:
                 if fallback:
                     # _scrape_ig_fallback doesn't return "about" — always use bio
                     region = detect_region(fallback.get("biography", ""))
-                    ig_profiles[u] = {
+                    profile = {
                         "name": fallback["username"],
                         "fullName": fallback.get("fullName", ""),
                         "fans": fallback.get("followersCount", 0),
@@ -429,8 +461,15 @@ class Pipeline:
                         "region": region,
                         "latestPosts": fallback.get("latestPosts", []),
                     }
+                    ig_profiles[u] = profile
+                    if is_cache_enabled():
+                        set_cache(cache_key("profile", "IG", u), profile)
                 else:
                     print("❌")
+
+        # ── Merge cached profiles ──
+        tt_profiles.update(cached_tt)
+        ig_profiles.update(cached_ig)
 
         return tt_profiles, ig_profiles
 
@@ -682,6 +721,28 @@ class Pipeline:
             return
 
         print(f"\n=== STAGE 2: 抓 survivors 的 posts/videos（{POSTS_LIMIT} 条/人）===")
+
+        from icrush.apify_cache import cache_key, get_cached, set_cache, is_cache_enabled
+
+        # ── Check cache before Apify ──
+        cached_tt_posts: dict[str, list] = {}
+        cached_ig_posts: dict[str, list] = {}
+
+        if is_cache_enabled():
+            for u in list(tt_survivors):
+                data = get_cached(cache_key("posts", "TT", u))
+                if data:
+                    cached_tt_posts[u] = data
+                    tt_survivors.remove(u)
+            for u in list(ig_survivors):
+                data = get_cached(cache_key("posts", "IG", u))
+                if data:
+                    cached_ig_posts[u] = data
+                    ig_survivors.remove(u)
+            hits = len(cached_tt_posts) + len(cached_ig_posts)
+            if hits:
+                print(f"  [cache] posts: {hits}/{total} hits ({len(tt_survivors)} TT + {len(ig_survivors)} IG remaining)")
+
         tasks: list[asyncio.Task] = []
 
         if tt_survivors:
@@ -701,9 +762,9 @@ class Pipeline:
             ))
 
         if ig_survivors:
-            # Fetch up to 100 posts to find enough Reels/Videos for a reliable view average
+            # Fetch POSTS_LIMIT posts; 0-view accounts get flagged for manual review
             # Split into 3 batches to balance speed vs Apify rate limit
-            ig_fetch_limit = max(100, POSTS_LIMIT)
+            ig_fetch_limit = POSTS_LIMIT
             IG_BATCH = max(1, len(ig_survivors) // 3 + (1 if len(ig_survivors) % 3 else 0))
             ig_batches = [ig_survivors[i:i + IG_BATCH] for i in range(0, len(ig_survivors), IG_BATCH)]
             print(f"  → IG post-scraper detailedData, up to {ig_fetch_limit} posts ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
@@ -747,6 +808,19 @@ class Pipeline:
                     owner = p.get("ownerUsername")
                     if owner:
                         ig_posts_by_user.setdefault(owner, []).append(p)
+
+        # ── Save fresh posts to cache ──
+        if is_cache_enabled():
+            for name, post_list in tt_posts_by_user.items():
+                set_cache(cache_key("posts", "TT", name), post_list)
+            for owner, post_list in ig_posts_by_user.items():
+                set_cache(cache_key("posts", "IG", owner), post_list)
+
+        # ── Merge cached posts ──
+        for name, post_list in cached_tt_posts.items():
+            tt_posts_by_user[name] = post_list
+        for owner, post_list in cached_ig_posts.items():
+            ig_posts_by_user[owner] = post_list
 
         three_months_ago = datetime.now(timezone.utc) - timedelta(days=90)
 
@@ -837,11 +911,22 @@ class Pipeline:
                 avg_views = round(sum(views_list) / len(views_list))
                 posts_for_commercial = reels_videos  # commercial analysis on same reel/video set
             else:
-                avg_views = 0
+                avg_views = None  # no Reel/Video posts — don't pretend views are 0
                 posts_for_commercial = posts[:POSTS_LIMIT]  # fallback to recent posts for commercial check
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
             commercial_stats = analyze_commercial(posts_for_commercial, "IG", three_months_ago)
+
+            # 无 Reel/Video 帖 → 人工复查（图文帖无播放量数据，不作判断）
+            if avg_views is None:
+                region_acc = "是 (Wednesday)" if (wd.get("found") and wd.get("regionPass")) else "待复查"
+                self.results[wd_key] = {
+                    "platform": "IG", "name": u, "fans": p["fans"], "posts": p["posts"],
+                    "regionAccurate": region_acc, "avgViews": None,
+                    "genderFemale": gender_female, "commercialStats": commercial_stats,
+                    "verdict": "🟡 人工复查", "reason": "近3月无Reel/Video帖，无浏览量数据",
+                }
+                continue
 
             if wd.get("found") and wd.get("regionPass") and wd.get("genderPass"):
                 region_acc = "是 (Wednesday)"

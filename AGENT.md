@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.7.2**
+当前版本：**v0.8.0**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -18,7 +18,7 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 - **ICRUSH 实习生**，找德国 IG/TT 珠宝时尚达人
 - 使用 **飞书** 做共享查重表
 - 使用 **Wednesday (Upfluence)** 看受众画像，月配额 3000 views
-- **预算敏感**：Apify 月配额已耗尽，需充值
+- **预算敏感**：Apify 月配额 $300，花费达到阈值需暂停
 - Python 路径：`C:\Users\yaxua\AppData\Local\Programs\Python\Python312\python.exe`
 
 ---
@@ -108,6 +108,7 @@ icrush/
   gender.py                # 头像性别检测（Claude Vision）
   airtable.py / feishu.py # 排除名单 + 飞书结果同步（查重+append）
   apify.py                 # Apify API 客户端
+  apify_cache.py           # Apify 结果文件缓存（崩溃恢复省费用）
   config.py                # 阈值常量
 
 scripts/
@@ -130,10 +131,10 @@ docs/
 
 | Stage | 做什么 | 淘汰即停 |
 |-------|--------|---------|
-| STAGE 0 | KOL 查重（Lambda API） | 已入库则跳过 |
-| STAGE 1 | Profile + 短路淘汰 | 命中即终止 |
-| STAGE 1.5 | Wednesday 受众查询 | - |
-| STAGE 2 | IG: 100条→过滤Reel/Video→最近20条 / TT: 20条→3月过滤 | 通过/淘汰/置换/复查 |
+| STAGE 0 | KOL 查重（阿里云 API 4库 + 飞书结果表） | 已入库则跳过 |
+| STAGE 1 | Profile + 短路淘汰（含品牌号检测）+ Apify 缓存 | 命中即终止 |
+| STAGE 1.5 | Wednesday 受众查询（@用户名精确优先，fallback all） | - |
+| STAGE 2 | IG: 20条→Reel/Video平均浏览 / TT: 20条→3月过滤 | 通过/淘汰/置换/复查 |
 
 完整规则见 `docs/rules.md`
 
@@ -160,34 +161,17 @@ docs/
 
 ---
 
-## 当前会话状态（2026-06-26）
+## 当前会话状态（2026-06-29）
 
 ### 本会话完成
-- **Wednesday 地区规则调整**：DE+AT 合计 ≥35%（不再只看 DE）
-- **Wednesday 搜索修复**：两阶段匹配（快路径+慢路径）
-- **查重上线**：DEDUP_API_TOKEN 已配置，STAGE 0 生效
-- **鲁棒性加固**：Wednesday 登录重试、null 值防护、缓存 TTL、登录失败标记
-- **Chrome CDP 修复**：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
-- **端到端编排**：`run_full_workflow.py`（CDP→提取→pipeline，每阶段 3 次重试）
-- **部署支持**：`setup_first_time.bat` + `ensure_chrome_cdp.py` + `.env` 变量
-- **162人增量跑**：jamilaodonnell_ + jolinanaemii → 162 类似达人 → 71✅ 87❌ 3🟡 1✅
-- **飞书多维表格自动同步**：管道结果自动 append 到飞书（14字段含达人链接），STAGE 0 飞书结果表查重，URL 字段 `{link}` 格式修复
-- **查重 API 迁移**：Lambda → 阿里云，4 库查重（KOL总表/KOC红人库/实习生表/AWS KOC），`check_only: true` 只查不写
-- **IG 浏览量修复**：STAGE 2 抓 100 条 → 过滤 Reel/Video → 取最近 20 条计算 avgViews，解决图文博主浏览量=0 问题
-- **Wednesday 搜索修复**：`field: 'all'` 全字段搜索（去 `@` 前缀）
-- **TT 浏览量修复**：近 3 月过滤实际生效（之前计算了 `recent` 但从未使用）
-- **URL 解析修复**：`fetch_similar_accounts_v3.mjs` 支持完整 URL 种子（`sanitizeSeed`）
-- **文件名兼容**：Windows 非法字符 (`:`) 修复
-
-### 已验证案例
-- eva.waldenberger: 83 类似达人
-- lilly.wls: 84 类似达人
-- jamilaodonnell_: 83 类似达人
-- jolinanaemii: 81 类似达人
-- vanillaholica: DE 31.67% → DE+AT 53.62% ✅
+- **品牌/媒体号自动过滤**：STAGE 1 打分制，用户名/简介含品牌标识 → ❌ 品牌官方号
+- **Wednesday 搜索修复**：`@用户名 + social_media.username` 精确优先，fallback `all`，慢路径 5→20
+- **IG 帖子逻辑优化**：抓 20 条（非 100），仅 Reel/Video 计浏览，无视频 → 🟡 人工复查（不设 0）
+- **Apify 结果缓存**：`data/apify_cache/` 文件缓存，崩溃重跑不重复花费
+- **批量种子处理**：10 种子全跑完，$7.86，31 ✅ 合适达人
+- **GBK 编码全项目修复**：emoji 打印不再 crash
+- **飞书 token 刷新**：Python API 调用更新
 
 ### 待办
-- [ ] Wednesday 配额重置后刷新缓存（7/1）
-- [ ] 每天 7-8 轮跑种子积累达人库
-- [ ] GitHub push（网络/认证问题）
-- [ ] 飞书 webhook 集成（触发 run_full_workflow.py）
+- [ ] 飞书 token 自动刷新
+- [ ] GitHub push

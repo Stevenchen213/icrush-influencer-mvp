@@ -55,7 +55,7 @@ class ApifyClient:
         self._runs.append({"id": data["id"], "actor": actor})
         return RunResult(run_id=data["id"], dataset_id=data["defaultDatasetId"])
 
-    async def wait_for_run(self, run_id: str, max_wait_sec: int = 900) -> dict:
+    async def wait_for_run(self, run_id: str, max_wait_sec: int = 1800) -> dict:
         """Poll GET /v2/actor-runs/{runId} every 5s until terminal status."""
         t0 = time.monotonic()
         while time.monotonic() - t0 < max_wait_sec:

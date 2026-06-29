@@ -11,6 +11,10 @@ load_dotenv()
 TOKEN: str = os.environ["APIFY_TOKEN"]  # fail fast if missing
 SKIP_DEDUP: bool = os.environ.get("SKIP_DEDUP", "") == "1"
 
+# === Apify Cache ===
+APIFY_CACHE_ENABLED: bool = os.environ.get("APIFY_CACHE_ENABLED", "1") == "1"
+APIFY_CACHE_TTL_HOURS: int = int(os.environ.get("APIFY_CACHE_TTL_HOURS", "24"))
+
 # === Thresholds ===
 CAPTION_THRESHOLD: int = 25
 POSTS_LIMIT: int = 20

@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.7.2 (2026-06-26)
+**当前版本**：v0.8.0 (2026-06-29)
 
 ## 完整工作流
 
@@ -31,13 +31,14 @@ python scripts/run_full_workflow.py seed1
 | # | 条件 | 阈值 |
 |---|------|------|
 | 1 | 男博主 | 名字匹配 DE/EN/TR 男名 → ❌（情侣名不拒） |
-| 2 | 私密账户 | → ❌ |
-| 3 | 帖数 | < 200（IG reel >50% 可豁免到 150） |
-| 4 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
-| 5 | Caption 德语 | ≥ 25%（bio DE 时），不足则 🟡 复查 |
-| 6 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
-| 7 | 浏览量 | ≥4000 / 2000-3999 / <2000 |
-| 8 | 男粉占比 | ≤50%（>100K 放宽到 ≤65%） |
+| 2 | 品牌/媒体号 | 用户名/简介含品牌标识（_de, .de, official, shop 等）→ ❌ |
+| 3 | 私密账户 | → ❌ |
+| 4 | 帖数 | < 200（IG reel >50% 可豁免到 150） |
+| 5 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
+| 6 | Caption 德语 | ≥ 25%（bio DE 时），不足则 🟡 复查 |
+| 7 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
+| 8 | 浏览量 | ≥4000 / 2000-3999 / <2000（仅计 Reel/Video；无视频帖 → 🟡 人工复查） |
+| 9 | 男粉占比 | ≤50%（>100K 放宽到 ≤65%） |
 
 完整规则：**[docs/rules.md](docs/rules.md)**
 
@@ -45,9 +46,9 @@ python scripts/run_full_workflow.py seed1
 
 ```
 STAGE 0  → KOL 查重（阿里云 API 4库 + 飞书结果表，check_only 只查不写）+ 本地排除名单
-STAGE 1  → Apify 抓 Profile → 短路淘汰
-STAGE 1.5 → Wednesday 受众查询（field:all 全字段搜索，缓存优先）
-STAGE 2  → IG: 抓 100 条 → 过滤 Reel/Video → 最近 20 条 / TT: 20 条 → 3 月过滤
+STAGE 1  → Apify 抓 Profile → 短路淘汰（含品牌号检测）+ Apify 结果缓存
+STAGE 1.5 → Wednesday 受众查询（@用户名 + social_media.username 精确匹配，fallback: all 全字段搜索）
+STAGE 2  → IG: 抓 20 条 → 过滤 Reel/Video 算平均浏览 / TT: 20 条 → 3 月过滤
          → 浏览量 + caption 德语率 + 近3月商单 → 最终判定 ✅/❌/🟡置换/🟡复查
          → 飞书多维表格自动同步（需 FEISHU_SYNC_ENABLED=1）
 ```
@@ -180,6 +181,13 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
   - 新增 `--auto-pipeline` 一键全自动
   - 删除 drissionpage 依赖
   - 配置文件精简
+- **v0.8.0** (2026-06-29)：
+  - 品牌/媒体号自动过滤：STAGE 1 打分制检测，用户名/简介含品牌标识（`_de`、`.de`、官方号、媒体/综艺模式等）→ ❌ 品牌官方号
+  - Wednesday 搜索修复：`@用户名 + social_media.username` 精确优先，fallback `all` 全字段，慢路径 5→20 条
+  - Apify 结果缓存：`data/apify_cache/` 文件缓存，崩溃重跑不重复花费
+  - IG 帖子优化：抓 20 条（非 100），仅 Reel/Video 计浏览，无视频 → 🟡 人工复查
+  - 飞书同步 STAGE 0 查重 + 结果自动同步
+  - Apify 超时 900→1800s、GBK 编码全项目修复
 - **v0.7.2** (2026-06-26)：
   - Chrome CDP 根因修复：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
   - 提取脚本三修复：See all 选择器 / 滚动容器 / 提前停止

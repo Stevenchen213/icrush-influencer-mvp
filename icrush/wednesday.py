@@ -305,13 +305,27 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                     async function searchOne(username) {
                         try {
                             const uLower = username.toLowerCase();
-                            const sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
+                            const baseBody = { filters: [], audience_filters: [], social_media_matching_operator: 'or', should_save: false, track_hits_results: 10000, score_model: 'default' };
+
+                            // Try exact social_media.username match first (fast, precise)
+                            let sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
                                 method: 'POST',
                                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-                                body: JSON.stringify({ criterias: [{ value: username, weight: 1, field: 'all', type: 'should' }], filters: [], audience_filters: [], social_media_matching_operator: 'or', should_save: false, track_hits_results: 10000, score_model: 'default' }),
+                                body: JSON.stringify({ ...baseBody, criterias: [{ value: '@' + username, weight: 1, field: 'social_media.username', type: 'should' }] }),
                             });
-                            const sd = await sr.json();
-                            const infs = sd.influencers || [];
+                            let sd = await sr.json();
+                            let infs = sd.influencers || [];
+
+                            // Fallback: if no hits, try broad 'all' field search
+                            if (infs.length === 0) {
+                                sr = await fetch('https://facade.upfluence.co/api/v1/matches?page=1&per_page=50&offset=0', {
+                                    method: 'POST',
+                                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+                                    body: JSON.stringify({ ...baseBody, criterias: [{ value: username, weight: 1, field: 'all', type: 'should' }] }),
+                                });
+                                sd = await sr.json();
+                                infs = sd.influencers || [];
+                            }
 
                             // Fast path: match from search results' embedded instagrams/tiktoks
                             for (const inf of infs) {
@@ -327,8 +341,8 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
                                 }
                             }
 
-                            // Slow path: fetch full profile for top results
-                            for (const inf of infs.slice(0, 5)) {
+                            // Slow path: fetch full profile for top results (up to 20)
+                            for (const inf of infs.slice(0, 20)) {
                                 try {
                                     const dr = await fetch(`https://facade.upfluence.co/api/v1/influencers/${inf.id || inf.influencer_id}`, {
                                         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },

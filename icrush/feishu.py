@@ -9,9 +9,13 @@ Results sync table (write):
 """
 
 import calendar
+import sys
 from datetime import datetime
 
 import httpx
+
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from icrush.classifier import format_commercial_stats
 from icrush.config import (

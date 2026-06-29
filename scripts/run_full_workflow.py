@@ -13,6 +13,10 @@ import json
 import os
 from pathlib import Path
 from urllib.request import urlopen, Request
+
+# Fix Windows GBK encoding for emoji output
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parent.parent
