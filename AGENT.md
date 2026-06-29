@@ -29,7 +29,8 @@ GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 |---|------|
 | 语言 | Python >=3.11 |
 | 依赖 | httpx, langdetect, playwright, python-dotenv |
-| 数据源 | Playwright CDP（IG 类似账户）、Apify Actors、Wednesday API |
+| 达人发现 | Playwright CDP（IG 类似账户）— 唯一发现方法 |
+| 筛选数据 | Apify Actors（profile/posts）、Wednesday API（受众画像） |
 | 容灾 | Apify 失败 -> Playwright headless 兜底 |
 | 结果 | Markdown 表格输出到 `results/` |
 

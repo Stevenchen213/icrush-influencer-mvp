@@ -434,6 +434,11 @@ async def live_lookup(usernames: list[str], *, timeout: int = 60000) -> dict[str
     return results
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  已废弃 — v0.7.1 移除的 Wednesday 关键词发现功能
+#  仅保留作为代码参考，不用于达人获取
+# ═══════════════════════════════════════════════════════════════════
+
 async def search_keyword(
     keyword: str,
     *,

@@ -36,7 +36,7 @@ python scripts/run_batch.py data/input_similar_combined.txt
 ## 技术栈
 
 Python >=3.11 | httpx, langdetect, playwright, python-dotenv
-数据源: Playwright CDP (IG 类似账户), Apify Actors, Wednesday API
+发现: Playwright CDP (IG 类似账户) | 筛选: Apify Actors, Wednesday API
 
 ## 关键文件
 
