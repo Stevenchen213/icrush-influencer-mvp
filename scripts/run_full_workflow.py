@@ -27,6 +27,7 @@ EXTRACT_SCRIPT = ROOT / "scripts" / "fetch_similar_accounts_v3.mjs"
 ENSURE_CDP = ROOT / "scripts" / "ensure_chrome_cdp.py"
 RUN_BATCH = ROOT / "scripts" / "run_batch.py"
 COMBINED_INPUT = ROOT / "data" / "input_similar_combined.txt"
+SEEDS_PROCESSED = ROOT / "data" / "seeds_processed.txt"
 
 MAX_RETRIES = 3
 RETRY_DELAY_BASE = 5  # seconds, doubles each retry
@@ -145,11 +146,33 @@ def step_pipeline() -> bool:
     return False
 
 
+def load_processed_seeds() -> set[str]:
+    """Return the set of seed usernames that have already been processed."""
+    if not SEEDS_PROCESSED.exists():
+        return set()
+    return set(
+        line.strip() for line in SEEDS_PROCESSED.read_text("utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+
+def save_processed_seeds(seeds: list[str]) -> None:
+    """Append successfully processed seeds to the history file."""
+    SEEDS_PROCESSED.parent.mkdir(parents=True, exist_ok=True)
+    existing = load_processed_seeds()
+    new = [s for s in seeds if s not in existing]
+    if new:
+        with SEEDS_PROCESSED.open("a", encoding="utf-8") as f:
+            for s in new:
+                f.write(f"{s}\n")
+
+
 def main():
     # Parse args — separate flags from seed usernames
     args = sys.argv[1:]
     seeds: list[str] = []
     max_retries_override = None
+    force_flag = False
     i = 0
     while i < len(args):
         if args[i] == "--max-retries" and i + 1 < len(args):
@@ -159,6 +182,9 @@ def main():
                 print(f"Invalid --max-retries value: {args[i+1]}")
                 sys.exit(1)
             i += 2
+        elif args[i] == "--force":
+            force_flag = True
+            i += 1
         elif not args[i].startswith("--"):
             seeds.append(args[i])
             i += 1
@@ -172,7 +198,27 @@ def main():
     if not seeds:
         print("Usage: python scripts/run_full_workflow.py seed1 [seed2 ...]")
         print("       python scripts/run_full_workflow.py --max-retries 5 seed1 seed2")
+        print("       python scripts/run_full_workflow.py --force seed1  (忽略历史，强制重跑)")
         sys.exit(1)
+
+    # ── 种子去重 ──
+    # 同一批次内去重（保持顺序）
+    seeds = list(dict.fromkeys(seeds))
+
+    # 跨批次去重：检查历史已处理的种子
+    if not force_flag:
+        processed = load_processed_seeds()
+        skipped = [s for s in seeds if s in processed]
+        seeds = [s for s in seeds if s not in processed]
+        if skipped:
+            print(f"⏭️  跳过 {len(skipped)} 个已处理种子: {', '.join(skipped)}")
+    else:
+        print("🔓 --force: 忽略种子历史记录，全部重新处理")
+
+    if not seeds:
+        print("✅ 所有种子均已处理过，无需重复运行。")
+        print("   （使用 --force 可强制重跑）")
+        sys.exit(0)
 
     print("=" * 55)
     print(f"ICRUSH Full Workflow — {len(seeds)} seeds, max {MAX_RETRIES} retries/step")
@@ -190,7 +236,11 @@ def main():
         sys.exit(1)
 
     # Stage 3: Pipeline
-    step_pipeline()
+    pipeline_ok = step_pipeline()
+
+    # 保存已处理的种子（即使 pipeline 部分失败也保存——提取已完成）
+    save_processed_seeds(seeds)
+    print(f"📝 种子已记录到 {SEEDS_PROCESSED.name}（共 {len(load_processed_seeds())} 个历史种子）")
 
     elapsed = time.time() - t0
     print(f"\n{'=' * 55}")
@@ -198,6 +248,9 @@ def main():
     if COMBINED_INPUT.exists():
         print(f"Next: check results/ for the latest report.")
     print(f"{'=' * 55}")
+
+    if not pipeline_ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

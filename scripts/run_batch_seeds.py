@@ -39,6 +39,29 @@ APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 
 seeds = [l.strip() for l in seed_file.read_text("utf-8").splitlines()
          if l.strip() and not l.strip().startswith("#")]
+
+# ── 种子去重 ──
+# 同一批次内去重
+seeds = list(dict.fromkeys(seeds))
+
+# 跨批次去重
+SEEDS_PROCESSED = ROOT / "data" / "seeds_processed.txt"
+if SEEDS_PROCESSED.exists():
+    processed = set(
+        line.strip() for line in SEEDS_PROCESSED.read_text("utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    )
+    skipped = [s for s in seeds if s in processed]
+    seeds = [s for s in seeds if s not in processed]
+    if skipped:
+        print(f"⏭️  跳过 {len(skipped)} 个已处理种子: {', '.join(skipped)}")
+else:
+    processed = set()
+
+if not seeds:
+    print("✅ 所有种子均已处理过，无需重复运行。")
+    sys.exit(0)
+
 print(f"Seeds: {len(seeds)} | Budget: ${budget:.0f} | File: {seed_file.name}\n")
 
 

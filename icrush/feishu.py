@@ -367,10 +367,14 @@ async def sync_approved_to_review(
 
     records: list[dict] = []
     skipped_no = 0
+    skipped_dup = 0
     for key, r in results.items():
         verdict = r.get("verdict", "")
         if verdict == "❌ 否":
             skipped_no += 1
+            continue
+        if verdict == "🟡 已入库":
+            skipped_dup += 1
             continue
 
         platform = r.get("platform", "")
@@ -380,7 +384,7 @@ async def sync_approved_to_review(
         records.append(fields)
 
     if not records:
-        print(f"  ℹ️ 飞书 二次判断: 无需同步记录（跳过 {skipped_no} 条 ❌ 否）")
+        print(f"  ℹ️ 飞书 二次判断: 无需同步记录（跳过 {skipped_no} 条 ❌ 否, {skipped_dup} 条已入库）")
         return True
 
     # ── Execute ──
@@ -389,7 +393,7 @@ async def sync_approved_to_review(
             ok = await _batch_create(client, b_id, t_id, tkn, records)
 
         if ok:
-            print(f"  ✓ 飞书 二次判断: 同步 {len(records)} 条记录（排除 {skipped_no} 条 ❌ 否）")
+            print(f"  ✓ 飞书 二次判断: 同步 {len(records)} 条记录（排除 {skipped_no} 条 ❌ 否, {skipped_dup} 条已入库）")
         else:
             print(f"  ⚠️ 飞书 二次判断: 部分同步失败（{len(records)} 条）")
 

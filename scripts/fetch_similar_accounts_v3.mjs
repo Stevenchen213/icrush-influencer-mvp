@@ -230,6 +230,15 @@ async function extractSimilarAccounts(page, seed, cfg) {
     }, amount);
     await sleep(jitter(cfg.scrollDelayBase, cfg.scrollDelayJitter));
 
+    // Extra pause for Instagram lazy-load to catch up before counting
+    if (i > 0) {
+      await sleep(jitter(400, 300));  // 400±300ms extra for lazy-load rendering
+      // Every 10 scrolls, give IG a longer breather
+      if (i % 10 === 0) {
+        await sleep(jitter(1500, 500));
+      }
+    }
+
     // Check link count to decide if we should stop
     const currentCount = await page.evaluate(() => {
       const s = new Set();
@@ -243,7 +252,7 @@ async function extractSimilarAccounts(page, seed, cfg) {
 
     if (currentCount === prevLinkCount) {
       noNewLinksStreak++;
-      if (noNewLinksStreak >= 4 && currentCount > 10) {
+      if (noNewLinksStreak >= 6 && currentCount > 10) {
         console.log(`    No new links after ${i + 1} scrolls (${currentCount} total), done.`);
         break;
       }
