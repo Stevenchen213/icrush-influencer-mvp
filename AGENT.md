@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.8.2**
+当前版本：**v0.8.3**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -163,30 +163,18 @@ docs/
 
 ## 当前会话状态（2026-06-30）
 
+### v0.8.3 更新（今日）
+- **种子去重**：`run_full_workflow.py` / `run_batch_seeds.py` 批次内+跨批次去重（`data/seeds_processed.txt`），`--force` 强制重跑
+- **Scroll 修复**：`fetch_similar_accounts_v3.mjs` 额外懒加载等待（400±300ms）+ 每10次1.5s喘息 + 放弃阈值 4→6
+- **二次判断表优化**：排除"🟡 已入库"（原仅排除"❌ 否"），仅同步需人工判断的结果
+- **SOP 文档**：`docs/达人二次判断-SOP.md` + `scripts/feishu_create_sop_doc.py` 自动生成飞书文档
+- **飞书 App 权限**：新增 `docx:document` 权限
+- **批量跑结果**：4 种子 → 251 个 profile → 37 ✅ 是 / 28 🟡 复查 / 12 🟡 置换组
+- **GitHub push** ✅
+
 ### v0.8.2 更新
-- **品牌过滤修复**：bio/username 信号分离，杜绝邮箱 `.de` 误杀
-- **抓取失败 bug 修复**：缓存合并加防御性校验
-- **飞书 token 自动刷新**：`_get_feishu_token()` 过期前 5 分钟自动换新
-- **Chrome CDP 可靠性**：深度检测（开测试标签页）+ 提取失败自动 `--restart`
-- **人工复查地区检查**：无视频帖也查 bio 地区
-- **批量脚本**：`run_batch_seeds.py` 通用化，逐人同步飞书
-- **20 种子跑完**：19 OK / 1 fail（louiseemma1412），25 ✅
-
-### v0.8.0 更新（2026-06-29）
-- **品牌/媒体号自动过滤**：STAGE 1 打分制
-- **Wednesday 搜索修复**：两阶段匹配（快路径+慢路径）
-- **IG 帖子逻辑优化**：抓 20 条（非 100），无视频 → 🟡 人工复查
-- **Apify 结果缓存**：`data/apify_cache/` 文件缓存
-- **飞书多维表格自动同步**：管道结果自动 append，STAGE 0 飞书结果表查重
-- **查重 API 迁移**：Lambda → 阿里云，4 库查重，`check_only: true` 只查不写
-- **GBK 编码全项目修复**
-
-### v0.7.x 更新（2026-06-24~26）
-- Chrome CDP 根因修复：`--user-data-dir` 替代 `--profile-directory`
-- 类似账户三步弹窗法，每种子 ~80 达人，免费
-- 端到端编排：`run_full_workflow.py`（CDP→提取→pipeline，每阶段 3 次重试）
-- Wednesday 地区规则：DE+AT 合计 ≥35%
-- TT 浏览量修复：近 3 月过滤实际生效
+- 品牌过滤修复 / 抓取失败 bug 修复 / 飞书 token 自动刷新
+- Chrome CDP 可靠性 / 人工复查地区检查 / run_batch_seeds.py 通用化
 
 ### 待办
-- [ ] GitHub push
+- [ ] Wednesday 配额重置后刷新缓存（7/1）

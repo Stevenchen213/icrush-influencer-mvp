@@ -2,19 +2,28 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.8.2 (2026-06-30)
+**当前版本**：v0.8.3 (2026-06-30)
 
 ## 完整工作流
 
 ```bash
-# 批量种子（逐个安全模式）
-python scripts/_run_seeds_one_by_one.py  # 读取 data/batch_72.txt，逐个跑完
+# 批量种子（直接贴 URL）
+python scripts/run_full_workflow.py seed1 seed2 seed3
 
-# 单个种子
-python scripts/run_full_workflow.py seed1
+# 强制重跑已处理种子（忽略历史）
+python scripts/run_full_workflow.py --force seed1
+
+# 从文件批量读取（带预算控制）
+python scripts/run_batch_seeds.py data/seeds.txt --budget 40
 
 # 输出：results/YYYY-MM-DD_batchN_seq.md（Markdown 报表）
 ```
+
+### 种子去重
+
+- **批次内去重**：相同种子自动合并
+- **跨批次去重**：处理后写入 `data/seeds_processed.txt`，下次自动跳过
+- **强制重跑**：`--force` 忽略历史记录
 
 ### 分步说明
 
@@ -50,15 +59,23 @@ STAGE 1  → Apify 抓 Profile → 短路淘汰（含品牌号检测）+ Apify �
 STAGE 1.5 → Wednesday 受众查询（@用户名 + social_media.username 精确匹配，fallback: all 全字段搜索）
 STAGE 2  → IG: Reel Scraper 抓 40 条 Reel（近3月），取前 10 条算浏览量 / TT: 20 条 → 3 月过滤
          → 浏览量 + caption 德语率 + 近3月商单 → 最终判定 ✅/❌/🟡置换/🟡复查
-         → 飞书多维表格自动同步（需 FEISHU_SYNC_ENABLED=1）
+         → 飞书多维表格自动同步: 主结果表（排除已入库）+ 二次判断表（排除已入库+❌否）
 ```
 
 ## 飞书多维表格自动同步
 
-开启 `FEISHU_SYNC_ENABLED=1` 后，管道跑完自动同步结果到飞书：
-- **STAGE 0**：查询飞书结果表已有用户 → 命中则"已入库"跳过
-- **管道末尾**：新结果 append 到多维表格（13 字段：用户名/平台/粉丝/帖数/地区/浏览量/女粉/Caption/商单/判定/原因/批次/日期/链接）
-- 同步失败不阻塞管道，关掉 `FEISHU_SYNC_ENABLED=0` 即可
+开启 `FEISHU_SYNC_ENABLED=1` 后，管道跑完自动同步到两张飞书表：
+
+**主结果表**（`FEISHU_RESULTS_TABLE_ID`）：
+- STAGE 0 查重命中 → 标记"已入库"跳过
+- 全量结果 append（排除已入库）
+
+**二次判断表**（`FEISHU_REVIEW_TABLE_ID`）：
+- 排除"❌ 否"和"🟡 已入库"，仅同步需人工判断的结果
+- 提供"总结反馈"和"二次判定"两列供人工填写
+- 审核 SOP：[飞书文档](https://icrush.feishu.cn/docx/IIdpdBoF8oDgaexKco1cIeoFnzb) | [Markdown](docs/达人二次判断-SOP.md)
+
+同步失败不阻塞管道，关掉 `FEISHU_SYNC_ENABLED=0` 即可
 
 ## 判定矩阵
 
@@ -99,10 +116,11 @@ icrush-influencer-mvp/
 │   ├── fetch_comments.py       → 手动抓取评论（旧，保留备用）
 │   └── extract_urls.py         → TT 评论 URL 提取器（旧，保留备用）
 ├── docs/
-│   ├── rules.md                → 完整规则文档
-│   └── similar_accounts_guide.md → 类似账户提取指南
+│   ├── rules.md                     → 完整规则文档
+│   ├── similar_accounts_guide.md    → 类似账户提取指南
+│   └── 达人二次判断-SOP.md          → 人工审核操作规范
 ├── results/                    # 历次跑的结果
-├── data/                       # 抓取数据 + 缓存（gitignored）
+├── data/                       # 抓取数据 + 缓存 + 种子历史（gitignored）
 ├── .claude/memory/             # AI agent 上下文
 ├── AGENT.md / CLAUDE.md        # AI agent 入口
 ├── pyproject.toml
@@ -181,6 +199,12 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
   - 新增 `--auto-pipeline` 一键全自动
   - 删除 drissionpage 依赖
   - 配置文件精简
+- **v0.8.3** (2026-06-30)：
+  - 种子去重：批次内 + 跨批次（`seeds_processed.txt`），`--force` 强制重跑
+  - Scroll 修复：额外懒加载等待 + 放弃阈值 4→6
+  - 二次判断表优化：排除"已入库"，仅同步需人工判断的结果
+  - 达人二次判断 SOP 文档 + 飞书文档生成脚本
+  - 批量预算控制：`run_batch_seeds.py --budget`
 - **v0.8.2** (2026-06-30)：
   - 飞书 token 自动刷新：`_get_feishu_token()` 过期前 5 分钟自动换新
   - Chrome CDP 可靠性：深度健康检测（开测试标签页）+ 提取失败自动重启
