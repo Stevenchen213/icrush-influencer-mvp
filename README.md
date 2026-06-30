@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.8.0 (2026-06-29)
+**当前版本**：v0.8.2 (2026-06-30)
 
 ## 完整工作流
 
@@ -181,13 +181,18 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
   - 新增 `--auto-pipeline` 一键全自动
   - 删除 drissionpage 依赖
   - 配置文件精简
+- **v0.8.2** (2026-06-30)：
+  - 飞书 token 自动刷新：`_get_feishu_token()` 过期前 5 分钟自动换新
+  - Chrome CDP 可靠性：深度健康检测（开测试标签页）+ 提取失败自动重启
+  - 品牌过滤修复：bio/username 信号分离，防止邮箱 `.de` 误杀
+  - 抓取失败 bug 修复：缓存合并防御性校验
+  - 人工复查地区检测：无视频帖也查 bio 地区
 - **v0.8.0** (2026-06-29)：
-  - 品牌/媒体号自动过滤：STAGE 1 打分制检测，用户名/简介含品牌标识（`_de`、`.de`、官方号、媒体/综艺模式等）→ ❌ 品牌官方号
-  - Wednesday 搜索修复：`@用户名 + social_media.username` 精确优先，fallback `all` 全字段，慢路径 5→20 条
-  - Apify 结果缓存：`data/apify_cache/` 文件缓存，崩溃重跑不重复花费
-  - IG 帖子优化：抓 20 条（非 100），仅 Reel/Video 计浏览，无视频 → 🟡 人工复查
-  - 飞书同步 STAGE 0 查重 + 结果自动同步
-  - Apify 超时 900→1800s、GBK 编码全项目修复
+  - 品牌/媒体号自动过滤：STAGE 1 打分制检测
+  - Wednesday 搜索修复：`@用户名 + social_media.username` 精确优先
+  - Apify 结果缓存：`data/apify_cache/` 文件缓存
+  - IG 帖子优化：抓 20 条，无视频 → 🟡 人工复查
+  - GBK 编码全项目修复
 - **v0.7.2** (2026-06-26)：
   - Chrome CDP 根因修复：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
   - 提取脚本三修复：See all 选择器 / 滚动容器 / 提前停止

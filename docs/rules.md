@@ -1,4 +1,4 @@
-# ICRUSH Influencer Vetting Pipeline — v0.7.2 Rules
+# ICRUSH Influencer Vetting Pipeline — v0.8.2 Rules
 
 > 最后更新: 2026-06-26
 

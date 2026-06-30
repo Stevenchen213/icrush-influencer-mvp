@@ -5,7 +5,7 @@
 
 ## 项目概况
 
-**ICRUSH v0.8.0** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+**ICRUSH v0.8.2** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
 
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 

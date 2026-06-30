@@ -8,6 +8,8 @@ seed_file: one Instagram URL per line
 """
 import os, subprocess, sys, time, json, urllib.request
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
