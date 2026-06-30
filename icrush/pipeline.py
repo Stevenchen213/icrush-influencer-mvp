@@ -468,8 +468,16 @@ class Pipeline:
                     print("❌")
 
         # ── Merge cached profiles ──
-        tt_profiles.update(cached_tt)
         ig_profiles.update(cached_ig)
+        tt_profiles.update(cached_tt)
+
+        # Defensive: verify cached users actually merged (no silent miss)
+        for u, profile in cached_ig.items():
+            if u not in ig_profiles:
+                ig_profiles[u] = profile
+        for u, profile in cached_tt.items():
+            if u not in tt_profiles:
+                tt_profiles[u] = profile
 
         return tt_profiles, ig_profiles
 
@@ -517,6 +525,7 @@ class Pipeline:
         for u in unique_ig:
             p = ig_profiles.get(u)
             if p is None:
+                print(f"     ⚠️ {u}: 缓存/抓取均未返回 profile → 标记抓取失败")
                 self.results[f"IG:{u}"] = {
                     "platform": "IG", "name": u, "fans": None, "posts": None,
                     "regionAccurate": "-", "avgViews": None, "genderFemale": None,

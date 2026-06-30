@@ -10,6 +10,7 @@ Results sync table (write):
 
 import calendar
 import sys
+import time
 from datetime import datetime
 
 import httpx
@@ -19,6 +20,8 @@ if sys.platform == 'win32':
 
 from icrush.classifier import format_commercial_stats
 from icrush.config import (
+    FEISHU_APP_ID,
+    FEISHU_APP_SECRET,
     FEISHU_BASE_ID,
     FEISHU_RESULTS_BASE_ID,
     FEISHU_RESULTS_TABLE_ID,
@@ -26,6 +29,39 @@ from icrush.config import (
     FEISHU_TABLE_ID,
     FEISHU_TOKEN,
 )
+
+# ── Token auto-refresh ──
+_token_cache: dict = {"value": "", "expires_at": 0}
+
+
+def _get_feishu_token() -> str:
+    """Return a valid Feishu tenant_access_token, refreshing if expired.
+
+    Uses FEISHU_APP_ID / FEISHU_APP_SECRET to request a new token.
+    Falls back to static FEISHU_TOKEN if app credentials are missing.
+    Caches in memory with 5-minute safety buffer before actual expiry.
+    """
+    now = time.time()
+    if _token_cache["value"] and now < _token_cache["expires_at"] - 300:
+        return _token_cache["value"]
+
+    if FEISHU_APP_ID and FEISHU_APP_SECRET:
+        try:
+            resp = httpx.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": FEISHU_APP_ID, "app_secret": FEISHU_APP_SECRET},
+                timeout=10,
+            )
+            data = resp.json()
+            if data.get("code") == 0:
+                _token_cache["value"] = data["tenant_access_token"]
+                _token_cache["expires_at"] = now + data.get("expire", 7200)
+                return _token_cache["value"]
+        except Exception:
+            pass  # fall through to static token
+
+    # Fallback: static token from .env
+    return FEISHU_TOKEN
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -38,7 +74,7 @@ async def check_feishu(username: str) -> bool:
     Uses 飞书 Bitable API to search records.
     Returns True if found (should exclude), False if not found or API unavailable.
     """
-    if not FEISHU_TOKEN:
+    if not _get_feishu_token():
         return False  # No token → skip check gracefully
 
     # 飞书 Bitable List Records API
@@ -53,7 +89,7 @@ async def check_feishu(username: str) -> bool:
             resp = await client.get(
                 url,
                 headers={
-                    "Authorization": f"Bearer {FEISHU_TOKEN}",
+                    "Authorization": f"Bearer {_get_feishu_token()}",
                     "Content-Type": "application/json",
                 },
             )
@@ -77,7 +113,7 @@ async def check_feishu(username: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════
 
 def _auth_headers(token: str | None = None) -> dict:
-    t = token or FEISHU_TOKEN
+    t = token or _get_feishu_token()
     return {
         "Authorization": f"Bearer {t}",
         "Content-Type": "application/json",
@@ -101,7 +137,7 @@ async def fetch_all_usernames(
     """
     b_id = base_id or FEISHU_RESULTS_BASE_ID
     t_id = table_id or FEISHU_RESULTS_TABLE_ID
-    tkn = token or FEISHU_TOKEN
+    tkn = token or _get_feishu_token()
 
     if not tkn or not t_id:
         return set()
@@ -228,7 +264,7 @@ async def sync_to_feishu(
         return False
     b_id = base_id or FEISHU_RESULTS_BASE_ID
     t_id = table_id or FEISHU_RESULTS_TABLE_ID
-    tkn = token or FEISHU_TOKEN
+    tkn = token or _get_feishu_token()
     if not tkn or not t_id:
         return False
 
@@ -315,10 +351,10 @@ async def create_results_table(
     or None on failure. Does NOT write to .env (caller handles that).
     """
     b_id = base_id or FEISHU_RESULTS_BASE_ID
-    tkn = token or FEISHU_TOKEN
+    tkn = token or _get_feishu_token()
 
     if not tkn:
-        print("❌ FEISHU_TOKEN 未设置，无法创建表格")
+        print("❌ 飞书 token 未设置，无法创建表格")
         return None
 
     headers = _auth_headers(tkn)

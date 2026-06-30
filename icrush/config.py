@@ -63,6 +63,8 @@ AIRTABLE_TOKEN: str = os.environ.get("AIRTABLE_TOKEN", "")
 FEISHU_BASE_ID: str = os.environ.get("FEISHU_BASE_ID", "TgzJbUV0taC8VVsOyndcUp69nEh")
 FEISHU_TABLE_ID: str = os.environ.get("FEISHU_TABLE_ID", "tbl0vl4DSF0ChSjg")
 FEISHU_TOKEN: str = os.environ.get("FEISHU_TOKEN", "")
+FEISHU_APP_ID: str = os.environ.get("FEISHU_APP_ID", "")
+FEISHU_APP_SECRET: str = os.environ.get("FEISHU_APP_SECRET", "")
 
 # 飞书 results sync（需 FEISHU_SYNC_ENABLED=1 + FEISHU_RESULTS_TABLE_ID）
 FEISHU_SYNC_ENABLED: bool = os.environ.get("FEISHU_SYNC_ENABLED", "0") == "1"
