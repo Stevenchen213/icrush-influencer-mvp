@@ -774,10 +774,10 @@ class Pipeline:
 
         if ig_survivors:
             # Fetch REELS_LIMIT reels from last 3 months (server-side filtered)
-            # Split into 3 batches to balance speed vs Apify rate limit
-            IG_BATCH = max(1, len(ig_survivors) // 3 + (1 if len(ig_survivors) % 3 else 0))
+            # Batch ≤5 users per call to avoid timeouts (each user ~30-60s for 40 reels)
+            IG_BATCH = 5
             ig_batches = [ig_survivors[i:i + IG_BATCH] for i in range(0, len(ig_survivors), IG_BATCH)]
-            print(f"  → IG reel-scraper {REELS_LIMIT} reels (3mo) ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
+            print(f"  → IG reel-scraper {REELS_LIMIT} reels (3mo) ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×≤{IG_BATCH})")
             for batch in ig_batches:
                 tasks.append(asyncio.create_task(
                     self._start_and_fetch(ACTOR_IG_REELS, {
