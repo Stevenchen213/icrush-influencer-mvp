@@ -917,9 +917,14 @@ class Pipeline:
             gender_female = wd.get("genderFemale") if wd.get("found") else None
             commercial_stats = analyze_commercial(posts_for_commercial, "IG", three_months_ago)
 
-            # 无 Reel/Video 帖 → 人工复查（图文帖无播放量数据，不作判断）
+            # 无 Reel/Video 帖 → 人工复查（图文帖无播放量数据，但仍需查地区）
             if avg_views is None:
-                region_acc = "是 (Wednesday)" if (wd.get("found") and wd.get("regionPass")) else "待复查"
+                if wd.get("found") and wd.get("regionPass"):
+                    region_acc = "是 (Wednesday)"
+                elif p.get("region"):
+                    region_acc = "是"  # bio-based detection
+                else:
+                    region_acc = "待复查"
                 self.results[wd_key] = {
                     "platform": "IG", "name": u, "fans": p["fans"], "posts": p["posts"],
                     "regionAccurate": region_acc, "avgViews": None,

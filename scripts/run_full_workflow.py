@@ -105,8 +105,11 @@ def step_extract(seeds: list[str]) -> bool:
         log(f"Extraction failed (exit {result.returncode}), stderr: {result.stderr[:200]}")
         if attempt < MAX_RETRIES - 1:
             delay = RETRY_DELAY_BASE * (2 ** attempt)
-            log(f"Retry in {delay}s...")
+            log(f"Retry in {delay}s (restarting Chrome CDP)...")
             time.sleep(delay)
+            # Restart Chrome CDP — most failures are WebSocket timeout
+            subprocess.run([PYTHON, str(ENSURE_CDP), "--restart"], cwd=str(ROOT),
+                           capture_output=True, timeout=30)
 
     log("FATAL: Extraction failed after all retries.")
     return False

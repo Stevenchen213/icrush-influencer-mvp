@@ -91,6 +91,19 @@ def ensure():
 
 
 if __name__ == "__main__":
+    if "--restart" in sys.argv:
+        print("[ensure_chrome] Forcing restart...")
+        kill_chrome()
+        time.sleep(5)
+        start_chrome()
+        for _ in range(10):
+            if is_cdp_alive():
+                print("[ensure_chrome] CDP restarted on port", CDP_PORT)
+                sys.exit(0)
+            time.sleep(2)
+        print("[ensure_chrome] FAILED to restart")
+        sys.exit(1)
+
     ok = ensure()
     if ok:
         print("[ensure_chrome] Chrome CDP is ready.")
