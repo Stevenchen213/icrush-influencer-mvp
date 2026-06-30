@@ -17,6 +17,7 @@ from icrush.config import (
     DATA_DIR,
     FAN_REPLACE,
     POSTS_LIMIT,
+    REELS_LIMIT,
     SKIP_DEDUP,
     VIEW_OK,
     VIEW_REPLACE,
@@ -772,16 +773,16 @@ class Pipeline:
             ))
 
         if ig_survivors:
-            # Fetch POSTS_LIMIT reels from last 3 months (server-side filtered)
+            # Fetch REELS_LIMIT reels from last 3 months (server-side filtered)
             # Split into 3 batches to balance speed vs Apify rate limit
             IG_BATCH = max(1, len(ig_survivors) // 3 + (1 if len(ig_survivors) % 3 else 0))
             ig_batches = [ig_survivors[i:i + IG_BATCH] for i in range(0, len(ig_survivors), IG_BATCH)]
-            print(f"  → IG reel-scraper {POSTS_LIMIT} reels (3mo) ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
+            print(f"  → IG reel-scraper {REELS_LIMIT} reels (3mo) ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
             for batch in ig_batches:
                 tasks.append(asyncio.create_task(
                     self._start_and_fetch(ACTOR_IG_REELS, {
                         "username": batch,
-                        "resultsLimit": POSTS_LIMIT,
+                        "resultsLimit": REELS_LIMIT,
                         "onlyPostsNewerThan": "3 months",
                         "skipPinnedPosts": True,
                         "skipTrialReels": True,
@@ -913,19 +914,19 @@ class Pipeline:
 
             # All results are reels from last 3 months (server-side filtered)
             posts = ig_posts_by_user.get(u, [])
-            # Apply resultsLimit as safety cap (server should already obey)
-            reels = posts[:POSTS_LIMIT]
+            # Views: first POSTS_LIMIT reels (sufficient for stable average)
+            # Commercial: ALL reels (need larger sample to catch #ad posts)
+            views_reels = posts[:POSTS_LIMIT]
+            commercial_reels = posts  # up to REELS_LIMIT from scraper
 
-            if reels:
-                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in reels]
+            if views_reels:
+                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in views_reels]
                 avg_views = round(sum(views_list) / len(views_list))
-                posts_for_commercial = reels
             else:
                 avg_views = None  # no reels in last 3 months
-                posts_for_commercial = []
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
-            commercial_stats = analyze_commercial(posts_for_commercial, "IG", three_months_ago)
+            commercial_stats = analyze_commercial(commercial_reels, "IG", three_months_ago)
 
             # 无 Reel/Video 帖 → 人工复查（图文帖无播放量数据，但仍需查地区）
             if avg_views is None:

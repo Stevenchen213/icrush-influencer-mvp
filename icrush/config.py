@@ -18,6 +18,7 @@ APIFY_CACHE_TTL_HOURS: int = int(os.environ.get("APIFY_CACHE_TTL_HOURS", "24"))
 # === Thresholds ===
 CAPTION_THRESHOLD: int = 25
 POSTS_LIMIT: int = 10
+REELS_LIMIT: int = 40  # for commercial detection (larger sample)
 POSTS_MIN: int = 200
 FAN_MIN: int = 1_000
 FAN_MAX: dict[str, int] = {"TT": 500_000, "IG": 300_000}
