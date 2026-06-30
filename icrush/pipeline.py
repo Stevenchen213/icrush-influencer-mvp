@@ -12,6 +12,7 @@ from icrush.classifier import analyze_commercial
 from icrush.config import (
     ACTOR_IG_POSTS,
     ACTOR_IG_PROFILE,
+    ACTOR_IG_REELS,
     ACTOR_TT_PROFILE,
     DATA_DIR,
     FAN_REPLACE,
@@ -771,19 +772,19 @@ class Pipeline:
             ))
 
         if ig_survivors:
-            # Fetch POSTS_LIMIT posts; 0-view accounts get flagged for manual review
+            # Fetch POSTS_LIMIT reels from last 3 months (server-side filtered)
             # Split into 3 batches to balance speed vs Apify rate limit
-            ig_fetch_limit = POSTS_LIMIT
             IG_BATCH = max(1, len(ig_survivors) // 3 + (1 if len(ig_survivors) % 3 else 0))
             ig_batches = [ig_survivors[i:i + IG_BATCH] for i in range(0, len(ig_survivors), IG_BATCH)]
-            print(f"  → IG post-scraper detailedData, up to {ig_fetch_limit} posts ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
+            print(f"  → IG reel-scraper {POSTS_LIMIT} reels (3mo) ×{len(ig_survivors)} survivors ({len(ig_batches)} batches ×~{IG_BATCH})")
             for batch in ig_batches:
                 tasks.append(asyncio.create_task(
-                    self._start_and_fetch(ACTOR_IG_POSTS, {
+                    self._start_and_fetch(ACTOR_IG_REELS, {
                         "username": batch,
-                        "dataDetailLevel": "detailedData",
-                        "resultsLimit": ig_fetch_limit,
-                        "skipPinnedPosts": False,
+                        "resultsLimit": POSTS_LIMIT,
+                        "onlyPostsNewerThan": "3 months",
+                        "skipPinnedPosts": True,
+                        "skipTrialReels": True,
                     }, kind="ig-posts")
                 ))
 
@@ -813,9 +814,13 @@ class Pipeline:
                         "detailedMentions": v.get("detailedMentions", []),
                     })
             else:
+                # IG reels — normalize fields for downstream compatibility
                 for p in items:
                     owner = p.get("ownerUsername")
                     if owner:
+                        # Map paidPartnership → isSponsored for commercial detection
+                        if "isSponsored" not in p and p.get("paidPartnership"):
+                            p["isSponsored"] = True
                         ig_posts_by_user.setdefault(owner, []).append(p)
 
         # ── Save fresh posts to cache ──
@@ -903,25 +908,21 @@ class Pipeline:
         # Process IG survivors
         for u in ig_survivors:
             p = ig_profiles[u]
-            posts = ig_posts_by_user.get(u, [])
             wd_key = f"IG:{u}"
             wd = wednesday_data.get(wd_key, {"found": False})
 
-            # Filter to only Reels/Videos (has view data), keep up to POSTS_LIMIT most recent
-            reels_videos = [
-                x for x in posts
-                if (x.get("type") in ("Video", "Reel")
-                    or (x.get("videoPlayCount") or 0) > 0
-                    or (x.get("videoViewCount") or 0) > 0)
-            ][:POSTS_LIMIT]
+            # All results are reels from last 3 months (server-side filtered)
+            posts = ig_posts_by_user.get(u, [])
+            # Apply resultsLimit as safety cap (server should already obey)
+            reels = posts[:POSTS_LIMIT]
 
-            if reels_videos:
-                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in reels_videos]
+            if reels:
+                views_list = [x.get("videoPlayCount") or x.get("videoViewCount") or 0 for x in reels]
                 avg_views = round(sum(views_list) / len(views_list))
-                posts_for_commercial = reels_videos  # commercial analysis on same reel/video set
+                posts_for_commercial = reels
             else:
-                avg_views = None  # no Reel/Video posts — don't pretend views are 0
-                posts_for_commercial = posts[:POSTS_LIMIT]  # fallback to recent posts for commercial check
+                avg_views = None  # no reels in last 3 months
+                posts_for_commercial = []
 
             gender_female = wd.get("genderFemale") if wd.get("found") else None
             commercial_stats = analyze_commercial(posts_for_commercial, "IG", three_months_ago)

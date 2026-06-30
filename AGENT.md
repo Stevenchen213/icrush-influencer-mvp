@@ -134,7 +134,7 @@ docs/
 | STAGE 0 | KOL 查重（阿里云 API 4库 + 飞书结果表） | 已入库则跳过 |
 | STAGE 1 | Profile + 短路淘汰（含品牌号检测）+ Apify 缓存 | 命中即终止 |
 | STAGE 1.5 | Wednesday 受众查询（@用户名精确优先，fallback all） | - |
-| STAGE 2 | IG: 20条→Reel/Video平均浏览 / TT: 20条→3月过滤 | 通过/淘汰/置换/复查 |
+| STAGE 2 | IG: 10条Reel→平均浏览 / TT: 20条→3月过滤 | 通过/淘汰/置换/复查 |
 
 完整规则见 `docs/rules.md`
 

@@ -66,7 +66,7 @@ docs/
 | STAGE 0 | KOL 查重（阿里云 4 库，check_only）+ 飞书结果表查重 |
 | STAGE 1 | Profile + 短路淘汰 |
 | STAGE 1.5 | Wednesday 受众查询（field:all 全字段搜索） |
-| STAGE 2 | IG: 100→Reel/Video×20 / TT: 20→3月过滤 + 商单 |
+| STAGE 2 | IG: Reel Scraper 10条（3月服务端过滤）/ TT: 20条→3月过滤 + 商单 |
 | 末尾 | 飞书多维表格自动同步 |
 
 ## 重要约定

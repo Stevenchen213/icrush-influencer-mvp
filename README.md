@@ -48,7 +48,7 @@ python scripts/run_full_workflow.py seed1
 STAGE 0  → KOL 查重（阿里云 API 4库 + 飞书结果表，check_only 只查不写）+ 本地排除名单
 STAGE 1  → Apify 抓 Profile → 短路淘汰（含品牌号检测）+ Apify 结果缓存
 STAGE 1.5 → Wednesday 受众查询（@用户名 + social_media.username 精确匹配，fallback: all 全字段搜索）
-STAGE 2  → IG: 抓 20 条 → 过滤 Reel/Video 算平均浏览 / TT: 20 条 → 3 月过滤
+STAGE 2  → IG: Reel Scraper 抓 10 条 Reel（近3月服务端过滤）/ TT: 20 条 → 3 月过滤
          → 浏览量 + caption 德语率 + 近3月商单 → 最终判定 ✅/❌/🟡置换/🟡复查
          → 飞书多维表格自动同步（需 FEISHU_SYNC_ENABLED=1）
 ```

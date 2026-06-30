@@ -55,10 +55,10 @@
 
 ### STAGE 2：Posts 抓取 + 最终判定
 
-**IG**：抓取最近 100 条帖子 → 过滤仅保留 Reel/Video → 取最近 20 条
-- 平均浏览量：基于这 20 条 Reel/Video 的播放量计算
-- 商单分类：基于同一批 Reel/Video 的 caption 分析
-- 如无任何 Reel/Video，avgViews=0，商单 fallback 到最近 20 条普通帖子
+**IG**：Reel Scraper 抓取近 3 月最近 10 条 Reel（服务端 `onlyPostsNewerThan: "3 months"`）
+- 平均浏览量：基于这 10 条 Reel 的播放量计算
+- 商单分类：基于同一批 Reel 的 caption 分析
+- 如近 3 月无 Reel，avgViews=None → 🟡 人工复查
 
 **TT**：抓取 20 条视频 → 近 3 月内视频优先 → 不足则 fallback 到全部
 - 平均浏览量：基于筛选后视频的 playCount
