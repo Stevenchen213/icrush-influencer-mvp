@@ -12,36 +12,41 @@ from icrush.config import (
 from icrush.language import detect_male_by_name
 
 
-# Brand detection: scoring-based to reduce false positives
-_BRAND_SIGNALS: list[tuple[str, int]] = [
-    # High-confidence username patterns (3 pts each — enough alone)
+# Brand detection: scoring-based. Signals split into username-only and bio-only
+# to prevent .de/.com email addresses in bio from triggering brand detection.
+
+# Username-only signals (3 pts each — enough alone). TLD/suffix in username = brand.
+_BRAND_USERNAME_SIGNALS: list[tuple[str, int]] = [
     ("_deutschland", 3), ("_de", 3), ("_at", 3), ("_ch", 3), ("_dach", 3),
     ("_gmbh", 3), ("_shop", 3), ("_store", 3), ("_official", 3),
     (".de", 3), (".com", 3), (".at", 3), (".rtl", 3), (".tv", 3),
-    ("_online", 3),
-    # Business/retail suffixes
+    ("_online", 3), ("_magazin", 3), ("magazine", 3), ("_news", 3),
     ("jewelry", 3), ("jewellery", 3), ("schmuck", 3), ("bijoux", 3),
-    ("_magazin", 3), ("magazine", 3), ("_news", 3),
-    # Medium-confidence bio patterns (2 pts each)
-    ("www.", 2), (".de", 2), (".com", 2),
+]
+
+# Bio-only signals (lower weight — need combination to cross threshold)
+_BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
+    ("www.", 2),
     ("online-shop", 2), ("onlineshop", 2), ("online shop", 2),
     ("offiziell", 2), ("official", 2),
     ("gmbh", 2), ("impressum", 2), ("datenschutz", 2),
-    # TV / media indicators
+    # TV / media
     ("rtl+", 2), ("rtl.de", 2), ("prosieben", 3), ("sat.1", 3),
     ("tv show", 2), ("tv-show", 2), ("fernsehshow", 2),
     ("staffel", 1), ("folge", 1),
-    # Low-confidence (1 pt — needs combination)
+    # Weak signals (1 pt — must combine with others)
     ("shop", 1), ("store", 1), ("beauty", 1),
 ]
-_BRAND_THRESHOLD = 3  # score >= this → brand
+
+_BRAND_THRESHOLD = 3
 
 
 def is_brand_account(profile: dict) -> bool:
     """Score-based brand / corporate account detection.
 
-    Signals are weighted by confidence; only high aggregate scores flag.
-    Returns True if the account looks like a brand, not an individual creator.
+    Username signals (TLDs, suffixes) are checked against username only.
+    Bio signals (shop, impressum, etc.) are checked against bio + full_name only.
+    This prevents .de email addresses in bios from triggering false positives.
     """
     username: str = (profile.get("name") or "").lower()
     bio: str = (profile.get("bio") or "").lower()
@@ -49,18 +54,23 @@ def is_brand_account(profile: dict) -> bool:
 
     score = 0
 
-    # Username ends-with checks (suffix without underscore prefix)
+    # Username suffix check (e.g. lascanaofficial, weleda_deutschland)
     _brand_username_suffixes = ["official", "deutschland", "germany", "gmbh"]
     for sfx in _brand_username_suffixes:
         if username.endswith(sfx) and not username.endswith("_" + sfx):
             score += 3
 
-    for pat, weight in _BRAND_SIGNALS:
-        # TLD patterns (.de, .com, .at) only count at end of username
+    # Username-only signals
+    for pat, weight in _BRAND_USERNAME_SIGNALS:
         if pat in (".de", ".com", ".at") and pat in username:
             if not username.endswith(pat):
-                continue  # skip mid-name matches like "jenna.depner"
-        if pat in username or pat in bio or pat in full_name:
+                continue  # skip mid-name: "jenna.depner"
+        if pat in username:
+            score += weight
+
+    # Bio + full_name only signals (NOT username)
+    for pat, weight in _BRAND_BIO_SIGNALS:
+        if pat in bio or pat in full_name:
             score += weight
 
     return score >= _BRAND_THRESHOLD
