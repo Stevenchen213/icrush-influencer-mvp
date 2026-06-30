@@ -21,13 +21,32 @@ CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 
 
 def is_cdp_alive():
-    """Check if Chrome CDP is reachable."""
+    """Check if Chrome CDP is fully operational (not just HTTP-alive).
+
+    Does two checks:
+    1. /json/version — basic reachability
+    2. PUT /json/new — actually opens a tab (exercises full CDP stack)
+    """
     try:
         req = Request(f"{CDP_URL}/json/version")
         with urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read())
-            return "webSocketDebuggerUrl" in data
-    except (URLError, OSError, json.JSONDecodeError):
+            if "webSocketDebuggerUrl" not in data:
+                return False
+        # Try opening a test tab — confirms CDP isn't zombie
+        req2 = Request(f"{CDP_URL}/json/new?test_cdp", method="PUT")
+        with urlopen(req2, timeout=5) as resp2:
+            tab = json.loads(resp2.read())
+            if tab.get("id"):
+                # Close it immediately
+                try:
+                    req3 = Request(f"{CDP_URL}/json/close/{tab['id']}")
+                    urlopen(req3, timeout=2)
+                except Exception:
+                    pass
+                return True
+        return False
+    except (URLError, OSError, json.JSONDecodeError, Exception):
         return False
 
 
