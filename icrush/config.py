@@ -73,6 +73,13 @@ FEISHU_SYNC_ENABLED: bool = os.environ.get("FEISHU_SYNC_ENABLED", "0") == "1"
 FEISHU_RESULTS_BASE_ID: str = os.environ.get("FEISHU_RESULTS_BASE_ID", FEISHU_BASE_ID)
 FEISHU_RESULTS_TABLE_ID: str = os.environ.get("FEISHU_RESULTS_TABLE_ID", "")
 
+# 飞书 review table — "✅ 是" 结果二次人工判断
+FEISHU_REVIEW_SYNC_ENABLED: bool = os.environ.get(
+    "FEISHU_REVIEW_SYNC_ENABLED", str(FEISHU_SYNC_ENABLED)
+).lower() in ("1", "true")
+FEISHU_REVIEW_BASE_ID: str = os.environ.get("FEISHU_REVIEW_BASE_ID", FEISHU_RESULTS_BASE_ID)
+FEISHU_REVIEW_TABLE_ID: str = os.environ.get("FEISHU_REVIEW_TABLE_ID", "")
+
 # === KOL 查重 API（实习生部署） ===
 DEDUP_API_URL: str = os.environ.get(
     "DEDUP_API_URL",

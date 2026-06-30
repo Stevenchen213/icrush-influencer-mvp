@@ -25,6 +25,9 @@ from icrush.config import (
     FEISHU_BASE_ID,
     FEISHU_RESULTS_BASE_ID,
     FEISHU_RESULTS_TABLE_ID,
+    FEISHU_REVIEW_BASE_ID,
+    FEISHU_REVIEW_SYNC_ENABLED,
+    FEISHU_REVIEW_TABLE_ID,
     FEISHU_SYNC_ENABLED,
     FEISHU_TABLE_ID,
     FEISHU_TOKEN,
@@ -209,6 +212,29 @@ def _build_fields(
     return {k: v for k, v in fields.items() if v is not None}
 
 
+def _build_review_fields(
+    r: dict,
+    unique_username: str,
+    date_str: str,
+    batch_id: str,
+) -> dict:
+    """Map a single pipeline result to review table fields.
+
+    Reuses _build_fields for the standard columns and adds two
+    empty review columns (总结反馈, 二次判定) for humans to fill
+    in the Feishu UI.
+    """
+    fields = _build_fields(r, unique_username, date_str, batch_id)
+
+    # Review-specific columns — empty, humans fill these in Feishu UI
+    if "总结反馈" not in fields:
+        fields["总结反馈"] = ""
+    if "二次判定" not in fields:
+        fields["二次判定"] = ""
+
+    return fields
+
+
 async def _batch_create(
     client: httpx.AsyncClient,
     base_id: str,
@@ -310,6 +336,73 @@ async def sync_to_feishu(
         return False
 
 
+async def sync_approved_to_review(
+    results: dict,
+    batch_size: int,
+    file_num: int,
+    *,
+    base_id: str | None = None,
+    table_id: str | None = None,
+    token: str | None = None,
+) -> bool:
+    """Sync pipeline results to the review table — everything except "❌ 否".
+
+    Reviewers fill in 总结反馈 and 二次判定 in the Feishu UI.
+    Does NOT check for duplicates (STAGE 0 dedup handles that).
+
+    Returns True on success, False if skipped or any failure occurred.
+    """
+    # ── Guards ──
+    if not FEISHU_REVIEW_SYNC_ENABLED:
+        return False
+    b_id = base_id or FEISHU_REVIEW_BASE_ID
+    t_id = table_id or FEISHU_REVIEW_TABLE_ID
+    tkn = token or _get_feishu_token()
+    if not tkn or not t_id:
+        return False
+
+    # ── Filter: exclude "❌ 否" (everything else goes to review) ──
+    datestamp = datetime.now().strftime("%Y-%m-%d")
+    batch_id_str = f"{datestamp}_batch{batch_size}_{file_num}"
+
+    records: list[dict] = []
+    skipped_no = 0
+    for key, r in results.items():
+        verdict = r.get("verdict", "")
+        if verdict == "❌ 否":
+            skipped_no += 1
+            continue
+
+        platform = r.get("platform", "")
+        username = r.get("name", "")
+        unique_name = f"{platform}:{username}"
+        fields = _build_review_fields(r, unique_name, datestamp, batch_id_str)
+        records.append(fields)
+
+    if not records:
+        print(f"  ℹ️ 飞书 二次判断: 无需同步记录（跳过 {skipped_no} 条 ❌ 否）")
+        return True
+
+    # ── Execute ──
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            ok = await _batch_create(client, b_id, t_id, tkn, records)
+
+        if ok:
+            print(f"  ✓ 飞书 二次判断: 同步 {len(records)} 条记录（排除 {skipped_no} 条 ❌ 否）")
+        else:
+            print(f"  ⚠️ 飞书 二次判断: 部分同步失败（{len(records)} 条）")
+
+        return ok
+
+    except httpx.TimeoutException:
+        print("  ⚠️ 飞书 二次判断 同步超时，跳过")
+        return False
+    except Exception as e:
+        print(f"  ⚠️ 飞书 二次判断 同步异常: {e}")
+        return False
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  Table creation helper
 # ═══════════════════════════════════════════════════════════════════
@@ -337,6 +430,32 @@ RESULTS_TABLE_SCHEMA = [
     {"field_name": "原因", "type": 1},
     {"field_name": "批次ID", "type": 1},
     {"field_name": "日期", "type": 5},                   # 5 = Date
+]
+
+REVIEW_TABLE_SCHEMA = [
+    {"field_name": "用户名", "type": 1},                  # 1 = Text
+    {"field_name": "平台", "type": 3,                     # 3 = Single Select
+     "property": {"options": [{"name": "IG", "color": 0}, {"name": "TT", "color": 1}]}},
+    {"field_name": "达人链接", "type": 15},                # 15 = URL
+    {"field_name": "粉丝数量", "type": 2},                 # 2 = Number
+    {"field_name": "帖数", "type": 2},
+    {"field_name": "近三月平均浏览量", "type": 2},
+    {"field_name": "女粉占比", "type": 2},
+    {"field_name": "地区准确性", "type": 1},
+    {"field_name": "Caption德语占比", "type": 2},
+    {"field_name": "近3月商单", "type": 1},
+    {"field_name": "判定结果", "type": 1},                 # Text (always "✅ 是")
+    {"field_name": "原因", "type": 1},
+    {"field_name": "批次ID", "type": 1},
+    {"field_name": "日期", "type": 5},                    # 5 = Date
+    # ── Review columns (human-filled) ──
+    {"field_name": "总结反馈", "type": 1},                 # 1 = Text, empty for reviewers
+    {"field_name": "二次判定", "type": 3,                  # 3 = Single Select
+     "property": {"options": [
+         {"name": "通过", "color": 0},
+         {"name": "淘汰", "color": 1},
+         {"name": "待定", "color": 2},
+     ]}},
 ]
 
 
@@ -404,4 +523,74 @@ async def create_results_table(
 
     except Exception as e:
         print(f"[ERROR] Create table failed: {e}")
+        return None
+
+
+async def create_review_table(
+    name: str = "达人二次判断",
+    base_id: str | None = None,
+    token: str | None = None,
+) -> str | None:
+    """Create the review table in the configured Feishu Base.
+
+    Creates the table and all 16 fields (14 pipeline data + 2 review).
+    Returns the new table_id on success, or None on failure.
+    """
+    b_id = base_id or FEISHU_REVIEW_BASE_ID
+    tkn = token or _get_feishu_token()
+
+    if not tkn:
+        print("❌ 飞书 token 未设置，无法创建二次判断表格")
+        return None
+
+    headers = _auth_headers(tkn)
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            # 1. Create table
+            create_url = (
+                f"https://open.feishu.cn/open-apis/bitable/v1/"
+                f"apps/{b_id}/tables"
+            )
+            resp = await client.post(
+                create_url,
+                json={"table": {"name": name}},
+                headers=headers,
+            )
+            if resp.status_code != 200:
+                print(f"[ERROR] Failed to create review table: {resp.status_code} {resp.text}")
+                return None
+
+            data = resp.json()
+            table_id = data.get("data", {}).get("table_id", "")
+            if not table_id:
+                print(f"[ERROR] No table_id in response: {resp.text}")
+                return None
+
+            print(f"[OK] Review table created: {name} ({table_id})")
+
+            # 2. Add fields one by one
+            fields_url = (
+                f"https://open.feishu.cn/open-apis/bitable/v1/"
+                f"apps/{b_id}/tables/{table_id}/fields"
+            )
+            for field in REVIEW_TABLE_SCHEMA:
+                fr = await client.post(
+                    fields_url,
+                    json={
+                        "field_name": field["field_name"],
+                        "type": field["type"],
+                        "property": field.get("property"),
+                    },
+                    headers=headers,
+                )
+                if fr.status_code == 200:
+                    print(f"  [OK] Field: {field['field_name']}")
+                else:
+                    print(f"  [WARN] Field {field['field_name']}: {fr.status_code}")
+
+            return table_id
+
+    except Exception as e:
+        print(f"[ERROR] Create review table failed: {e}")
         return None

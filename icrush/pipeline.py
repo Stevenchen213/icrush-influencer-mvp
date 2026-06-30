@@ -23,7 +23,7 @@ from icrush.config import (
     VIEW_REPLACE,
 )
 from icrush.dedup import check_dedup
-from icrush.feishu import fetch_all_usernames, sync_to_feishu
+from icrush.feishu import fetch_all_usernames, sync_approved_to_review, sync_to_feishu
 from icrush.judges import (
     judge_from_caption,
     short_circuit,
@@ -123,12 +123,19 @@ class Pipeline:
         )
         print(f"\n✓ 存档到 {filepath}")
 
-        # === 飞书 sync ===
+        # === 飞书 sync: main results table ===
         synced = await sync_to_feishu(self.results, len(input_order), file_num)
         if synced:
-            print("✓ 同步到飞书多维表格")
+            print("✓ 同步到飞书多维表格（全量结果）")
         else:
             print("⚠️ 飞书同步跳过或失败（不影响 pipeline 结果）")
+
+        # === 飞书 sync: review table (✅ 是 only) ===
+        review_synced = await sync_approved_to_review(self.results, len(input_order), file_num)
+        if review_synced:
+            print("✓ 二次判断表同步完成")
+        else:
+            print("⚠️ 二次判断表同步跳过或失败（不影响 pipeline 结果）")
 
     # ── helpers ──────────────────────────────────────────────────
 
