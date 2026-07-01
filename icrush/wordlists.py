@@ -235,20 +235,21 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
     ],
     # ── 宠物 / 动物 ──
     "宠物/动物": [
-        "hund", "hunde", "katzen",
+        # Compound/professional — count first, then don't double-count the base word
+        "dog trainer", "dog training", "dog walking", "dog sitter",
+        "hundetrainer", "hundetraining", "hundeschule", "hundeblog",
+        "hundebetreuung", "hundesitter",
+        "katzenblog", "katzenbetreuung",
+        "welpen", "canine",
+        # Base words — each is a separate signal
         "tierarzt", "tierärztin", "tierheim",
         "tierschutz", "haustier",
         "fellnase", "samojede",
-        "ridgeback", "dog", "dogs",
-        "pfote", "tierisch",
-        "züchter", "hunderasse",
+        "ridgeback", "pfote", "tierisch",
+        "züchter",
         "horse", "pferd",
         "animal", "pet ",
         "reiterhof", "reitschule",
-        "hundetrainer", "hundeschule", "hundeblog",
-        "welpen", "canine", "katzenblog",
-        "dog trainer", "dog training", "dog walking",
-        "hundetraining", "hundebetreuung",
     ],
     # ── 家居 / DIY / 装修 / 清洁 ──
     "家居/DIY/清洁": [
