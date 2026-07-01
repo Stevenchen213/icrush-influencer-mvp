@@ -161,7 +161,7 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     # 母婴 and 美食 stay conservative (2 hits) to avoid false positives
     AGGRESSIVE_CATEGORIES = {
         "心理/咨询/治疗", "音乐/演出", "宗教/教会",
-        "医疗/健康", "宠物/动物", "家居/DIY/清洁",
+        "医疗/健康", "家居/DIY/清洁",
         "教育/知识付费",
     }
 
