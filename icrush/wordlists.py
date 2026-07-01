@@ -162,6 +162,13 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "healing", "spiritual", "spirituell",
         "bewusstseinscoach", "mentalcoach", "mindsetcoach",
         "coaching", "beratung",
+        # v0.9.1: from false-negative review
+        "familiencoach", "familienberater",
+        "trauerbegleitung", "systemisch",
+        "selbstliebe", "selbstwert",
+        "beziehungscoach", "bindungsangst",
+        "energetiker", "energetikerin",
+        "humanenergetiker", "humanenergetikerin",
     ],
     # ── 母婴 / 育儿 / 家庭 ──
     "母婴/育儿": [
@@ -181,6 +188,14 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "tagesmutter", "spielgruppe", "pflegekind",
         "kindererziehung", "bindungsorientiert",
         "bedürfnisorientiert", "attachment parenting",
+        # v0.9.1: from false-negative review
+        "babyschlaf", "geburtsvorbereitung", "momlife",
+        "mamatipps", "mama von", "mom of",
+        "familienalltag", "familienleben",
+        "patchworkfamilie", "familiencoach",
+        "mamaleben", "mamasein", "familienzeit",
+        "geschwister", "kindergeburtstag",
+        "mutterliebe", "elternsein",
     ],
     # ── 美食 / 烹饪 / 食谱 / 餐厅 ──
     "美食/烹饪": [
@@ -193,6 +208,14 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "streetfood", "foodtruck",
         "kitchen", "cook ", "cooking", "bakery",
         "baecker", "baeckerei", "konditorei",
+        # v0.9.1: missing keywords found from false-negative review
+        "gerichte", "pfanne", "pfannentesterin",
+        "kueche", "küche", "genuss", "schlemmer",
+        "gourmet", "foodlover", "foodie",
+        "geniessen", "genießen", "mahlzeit",
+        "lecker", "schmeckt", "foodstagram",
+        "rezeptideen", "kuechenliebe",
+        "schnelle küche", "familienküche",
     ],
     # ── 宗教 / 教会 / 灵性 ──
     "宗教/教会": [
@@ -232,11 +255,20 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "heilpraktiker", "heilpraktikerin",
         "clinic", "pharmacy", "apotheke",
         "praxis", "sprechstunde",
+        # v0.9.1: from false-negative review
+        "lipödem", "endometriose", "adenomyose",
+        "darmerkrankung", "ernährungsberatung",
+        "nährstoffberater", "nährstoffberatung",
+        "mikronährstoff", "ganzheitliche gesundheit",
+        "stoffwechsel", "hormonbalance",
+        "autoimmunerkrankung", "chronisch krank",
+        "diabetes", "migräne", "schilddrüsenerkrankung",
     ],
     # ── 宠物 / 动物 ──
     "宠物/动物": [
         # Compound/professional — count first, then don't double-count the base word
         "dog trainer", "dog training", "dog walking", "dog sitter",
+        "dogtraining", "dogwalking", "dogsitting",
         "hundetrainer", "hundetraining", "hundeschule", "hundeblog",
         "hundebetreuung", "hundesitter",
         "katzenblog", "katzenbetreuung",
@@ -250,16 +282,29 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "horse", "pferd",
         "animal", "pet ",
         "reiterhof", "reitschule",
+        # v0.9.1: from false-negative review
+        "heimtier", "tierbedarf", "tierkommunikation",
+        "tierkommunikatorin", "dressurreiterin",
+        "dressur", "reitsport", "pferdeliebe",
+        "dogmom", "catmom", "hundemama", "katzenmama",
+        "haustiere", "tierliebe", "tierwelt",
     ],
     # ── 家居 / DIY / 装修 / 清洁 ──
     "家居/DIY/清洁": [
-        "diy ", "doityourself", "selbermachen",
+        "diy", "doityourself", "selbermachen",
         "heimwerken", "heimwerker", "möbel",
-        "interior design", "einrichtung",
+        "interior", "interior design", "einrichtung",
         "wohnzimmer", "wohnung", "deko",
         "dekoration", "renovierung", "renovieren",
         "cleaning", "reinigung", "putzen",
         "aufräumen", "ordnung", "ausmisten",
+        # v0.9.1: missing keywords from false-negative review
+        "hausbau", "neubau", "eigenheim",
+        "einrichten", "home decor", "home design",
+        "wohnen", "zuhause", "traumhaus",
+        "homedeko", "wohnideen", "wohninspo",
+        "garderobe", "innenarchitektur",
+        "akustikpaneele", "wandgestaltung",
     ],
     # ── 教育 / 教师 / 知识付费 ──
     "教育/知识付费": [
@@ -271,6 +316,15 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "nachhilfe", "lerncoach",
         "podcast", "podcaster",
         "schule", "teacher", "academy",
+        # v0.9.1: from false-negative review
+        "klassenlehrerin", "klassenlehrer",
+        "schulalltag", "unterrichtsideen",
+        "pädagogin", "lehrkraft", "lehramt",
+        "referendariat", "schüler", "schueler",
+        "unterrichten", "bildungsbereich",
+        "erzieher", "kinderbetreuung",
+        "lernmaterial", "unterrichtsmaterial",
+        "padlet", "eduki",
     ],
 }
 

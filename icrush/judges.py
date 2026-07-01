@@ -22,6 +22,7 @@ _BRAND_USERNAME_SIGNALS: list[tuple[str, int]] = [
     ("_gmbh", 3), ("_shop", 3), ("_store", 3), ("_official", 3),
     (".de", 3), (".com", 3), (".at", 3), (".rtl", 3), (".tv", 3),
     ("_online", 3), ("_magazin", 3), ("magazine", 3), ("_news", 3),
+    ("_label", 3), ("_brand", 3),
     # Removed: jewelry/jewellery/schmuck/bijoux — too aggressive,
     # would false-positive on personal jewelry influencer accounts.
 ]
@@ -56,12 +57,15 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("hostel", 2), ("beachclub", 2),
     ("eventlocation", 2), ("event location", 2),
     # Brand / shop identities
-    ("boutique", 2), ("brand", 1), ("verlag", 2),
+    ("boutique", 2), ("brand", 2), ("label", 2), ("verlag", 2),
     ("friseur", 1), ("friseurin", 1), ("nagelstudio", 2),
     ("kosmetikstudio", 2), ("beauty studio", 2),
     ("permanent makeup", 2), ("microblading", 2),
     # Weak signals (1 pt — must combine with others)
     ("shop", 1), ("store", 1), ("beauty", 1),
+    ("edeka", 2), ("rewe", 2), ("lidl", 2), ("aldi", 2),
+    ("geschäft", 1), ("markt", 1), ("bedarf", 1),
+    ("eröffnungszeiten", 1), ("filiale", 1),
     ("instagram.com/", -10),   # never penalize bio links
 ]
 
@@ -87,6 +91,7 @@ def is_brand_account(profile: dict) -> bool:
         "shop", "store", "hotel", "restaurant", "festival",
         "agency", "studio", "clinic", "center", "company",
         "magazin", "verlag", "apotheke", "praxis",
+        "label", "brand",
     ]
     for sfx in _brand_username_suffixes:
         if username.endswith(sfx) and not username.endswith("_" + sfx):
@@ -104,6 +109,19 @@ def is_brand_account(profile: dict) -> bool:
     for pat, weight in _BRAND_BIO_SIGNALS:
         if pat in bio or pat in full_name:
             score += weight
+
+    # Known chain brands in full_name → strong signal (3 pts each)
+    # Personal accounts don't have supermarket/pharmacy names as their display name.
+    # Pad full_name with spaces for word-boundary matching of short names.
+    _fn_padded = " " + full_name + " "
+    _chain_brands = ["edeka", "rewe", "aldi", "lidl", " dm ", "rossmann",
+                     "müller", "netto", "penny", "kaufland", "norma"]
+    for cb in _chain_brands:
+        if cb.startswith(" ") and cb.endswith(" "):
+            if cb in _fn_padded:
+                score += 3
+        elif cb in full_name:
+            score += 3
 
     return score >= _BRAND_THRESHOLD
 
@@ -126,18 +144,26 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     # Whitelist: fashion/beauty/jewelry/lifestyle keywords take priority.
     # If bio clearly signals fashion/beauty niche, skip category blocking
     # even if it also contains psych/parenting/food keywords.
+    # Only fashion/beauty/jewelry-specific keywords. Generic terms like
+    # "creator", "influencer", "blogger", "lifestyle", "model", "pflege"
+    # are REMOVED — they appear in ALL niches and were preventing legitimate
+    # category blocking (e.g. "Home Creator" skipped 家居 detection).
     FASHION_SAFE_WORDS = {
         "fashion", "beauty", "makeup", "make-up", "skincare", "hautpflege",
         "schmuck", "jewelry", "jewellery", "outfit", "outfits", "ootd",
-        "mode", "style", "styling", "look", "lookbook", "streetstyle",
+        "mode", "style", "styling", "lookbook", "streetstyle",
         "nagel", "nails", "nägel", "friseur", "friseurin", "haare", "hair",
-        "cosmetic", "kosmetik", "pflege", "parfüm", "duft", "fragrance",
-        "modell", "model", "influencer", "creator", "content creator",
-        "lifestyle", "blogger", "bloggerin",
+        "cosmetic", "kosmetik", "parfüm", "duft", "fragrance",
         "gold", "silber", "silver", "kette", "halskette", "ohrringe",
         "armband", "bracelet", "ring", "ringe",
+        "lippenstift", "mascara", "foundation", "nagellack",
+        "augenbrauen", "brows", "lashes", "haircare",
     }
-    if any(w in combined for w in FASHION_SAFE_WORDS):
+    # Word-boundary match: split combined text into tokens and check set
+    # intersection. This prevents substrings like "mode" in "modern" or
+    # "ring" in "bring" from falsely triggering the fashion whitelist.
+    _fashion_tokens = set(combined.replace(",", " ").replace(".", " ").replace("|", " ").replace("/", " ").split())
+    if _fashion_tokens & FASHION_SAFE_WORDS:
         return (False, "")
 
     # High-specificity keywords: single match is enough
@@ -155,6 +181,14 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
         "ärztin", "aerztin", "arzt",                # doctor/physician
         "heilpraktiker", "heilpraktikerin",         # alternative medicine
         "autoimmun", "chronisch krank",             # chronic illness
+        # v0.9.1: from false-negative review
+        "grundschullehrerin", "klassenlehrerin",    # elementary teacher
+        "energetiker", "energetikerin",              # energy healer
+        "humanenergetiker", "humanenergetikerin",   # human energetics
+        "tierkommunikator", "tierkommunikatorin",   # animal communicator
+        "endometriose", "adenomyose",                # medical conditions
+        "lipödem",                                    # medical condition
+        "darmerkrankung",                             # gut disease
     }
 
     # Categories where a single keyword match is enough (high-noise categories)
@@ -162,7 +196,7 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     AGGRESSIVE_CATEGORIES = {
         "心理/咨询/治疗", "音乐/演出", "宗教/教会",
         "医疗/健康", "家居/DIY/清洁",
-        "教育/知识付费",
+        "教育/知识付费", "美食/烹饪",
     }
 
     for category, keywords in BIO_CATEGORY_BLOCKLIST.items():
