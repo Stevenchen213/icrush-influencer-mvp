@@ -141,6 +141,134 @@ CAT_LABELS: dict[str, str] = {
     "jewelry": "珠宝",
 }
 
+# === Bio Category Negative Keywords ===
+# P0 fix: detect wrong-category accounts (therapist, mommy blogger, foodie, etc.)
+# that pass language detection but don't match our fashion/beauty/jewelry niche.
+# Each category maps to a list of German keywords scanned in bio + full_name (lowercased).
+# Keywords are chosen to avoid false-positives on genuine fashion/lifestyle influencers.
+BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
+    # ── 心理 / 咨询 / 治疗 / 情感 / 身心灵 ──
+    "心理/咨询/治疗": [
+        "psycholog", "therap", "paartherap", "familienberat",
+        "trauer", "trauma", "narzissmus", "achtsamkeit",
+        "selbstoptimierung", "atmung", "breathwork",
+        "nervensystem", "heilung", "inneres kind",
+        "selbstfindung", "persönlichkeitsentwicklung",
+        "systemischer coach", "mental coach", "lifecoach",
+        "bewältigung", "resilienz",
+        "adhs", "mindset", "meditation", "mindfulness",
+        "mental health", "mental illness",
+        "depression", "angst", "burnout",
+        "healing", "spiritual", "spirituell",
+        "bewusstseinscoach", "mentalcoach", "mindsetcoach",
+        "coaching", "beratung",
+    ],
+    # ── 母婴 / 育儿 / 家庭 ──
+    "母婴/育儿": [
+        # Only explicit mommy-BLOGGER / parenting-content signals.
+        # Just mentioning "Mama" does NOT exclude — fashion influencers can be moms too.
+        "mamablog", "mamablogger", "mamabloggerin",
+        "elternblog", "elternblogger",
+        "familienblog", "familienblogger",
+        "mom blog", "mommy blog", "momblog",
+        "mama blog", "mami blog", "mutter blog",
+        "erziehung", "elternschaft", "familienbett",
+        "familienberat", "stillberatung",
+        "hebamme", "wochenbett", "schwanger",
+        "dreifachmama", "zweifachmama",
+        "drilling", "kinderwunsch", "adoption",
+        "homeschool", "grundschule", "kita", "kindergarten",
+        "tagesmutter", "spielgruppe", "pflegekind",
+        "kindererziehung", "bindungsorientiert",
+        "bedürfnisorientiert", "attachment parenting",
+    ],
+    # ── 美食 / 烹饪 / 食谱 / 餐厅 ──
+    "美食/烹饪": [
+        "rezept", "foodblog", "foodguide", "foodporn",
+        "kochen", "backen", "backblog", "fruehstueck",
+        "restaurant", "cafe", "foodie", "foodspot",
+        "ernaehrung", "ernaehrungsplan", "abnehmen",
+        "diaet", "kalorien", "naehrstoff",
+        "feinschmecker", "gastro", "gastronomie",
+        "streetfood", "foodtruck",
+        "kitchen", "cook ", "cooking", "bakery",
+        "baecker", "baeckerei", "konditorei",
+    ],
+    # ── 宗教 / 教会 / 灵性 ──
+    "宗教/教会": [
+        "jesus", "christ", "bibel", "kirche", "gospel",
+        "gott ", "gottes", "glaube", "gebet", "pastor",
+        "predigt", "evangelium", "testament",
+        "christlich", "auferstehung", "heilig",
+        "segen", "taufe", "konfirmation",
+        "gottesdienst", "gemeinde", "jünger",
+        "church", "bible", "ministry", "faith",
+        "god ", "christian", "catholic",
+        "worship", "prayer", "scripture",
+    ],
+    # ── 音乐 / DJ / 乐队 / 演出 / 音乐节 ──
+    "音乐/演出": [
+        "dj ", "producer", "sänger", "sängerin",
+        "musiker", "musikerin", "band ", "bands ",
+        "festival", "open air", "openair",
+        "konzert", "tour", "gig", "bühne",
+        "booking@", "bookings@", "mgmt@",
+        "aufleger", "remix", "electronic music",
+        "techno", "house music",
+        "singer", "songwriter", "rapper",
+        "ballermann", "schlager",
+    ],
+    # ── 医疗 / 健康 / 疾病科普 ──
+    "医疗/健康": [
+        "arzt", "aerztin", "ärztin", "medizin", "klinik",
+        "patient", "diagnos", "symptom",
+        "erkrankung", "autoimmun", "chronisch",
+        "entzuendung", "entzündung", "allergie", "unvertraeglich",
+        "darm", "hormon", "schilddruese",
+        "crohn", "colitis", "ernaehrungswissenschaft",
+        "zahnarzt", "zahnaerztin", "kieferorthopaed",
+        "hautarzt", "dermatolog",
+        "physiotherap", "osteopath",
+        "heilpraktiker", "heilpraktikerin",
+        "clinic", "pharmacy", "apotheke",
+        "praxis", "sprechstunde",
+    ],
+    # ── 宠物 / 动物 ──
+    "宠物/动物": [
+        "hund ", "hunde", "katze", "katzen",
+        "tierarzt", "tierärztin", "tierheim",
+        "tierschutz", "haustier", "haustiere",
+        "fellnase", "fellnasen", "samojede",
+        "ridgeback", "dog ", "dogs",
+        "pfote", "pfoten", "tierisch",
+        "züchter", "hunderasse", "katzenrasse",
+        "horse", "pferd", "pferde",
+        "animal", "haustier", "pet ",
+        "reiterhof", "reitschule",
+    ],
+    # ── 家居 / DIY / 装修 / 清洁 ──
+    "家居/DIY/清洁": [
+        "diy ", "doityourself", "selbermachen",
+        "heimwerken", "heimwerker", "möbel",
+        "interior design", "einrichtung",
+        "wohnzimmer", "wohnung", "deko",
+        "dekoration", "renovierung", "renovieren",
+        "cleaning", "reinigung", "putzen",
+        "aufräumen", "ordnung", "ausmisten",
+    ],
+    # ── 教育 / 教师 / 知识付费 ──
+    "教育/知识付费": [
+        "lehrerin", "grundschullehrerin",
+        "pädagog", "erzieherin",
+        "kurs", "kursangebot", "onlinekurs",
+        "workshop", "webinar", "coaching programm",
+        "ausbildung", "weiterbildung", "fortbildung",
+        "nachhilfe", "lerncoach",
+        "podcast", "podcaster",
+        "schule", "teacher", "academy",
+    ],
+}
+
 # === Male First Name Detection ===
 # Common German / European / Turkish male first names.
 # Case-insensitive matching against IG fullName first token.
@@ -153,6 +281,11 @@ MALE_FIRST_NAMES: frozenset[str] = frozenset(
     "niclas,nico,nicolas,niklas,nikolai,nils,noah,oliver,patrick,paul,peter,"
     "philipp,phillip,ralf,raphael,rene,robert,robin,samuel,sebastian,simon,"
     "stefan,thomas,tim,tobias,tom,uwe,valentin,vincent,wolfgang,yannick,"
+    # Missing German / European / Latin male names (from rejection review)
+    "pascal,julius,diego,miro,leo,ricardo,cedric,"
+    "sascha,sandro,heiko,malte,carsten,thorsten,sven,"
+    "germain,wolf,lui,luis,samouz,"
+    "tammo,batomae,"
     "adam,andrew,anthony,brandon,brian,charles,chris,connor,derek,dylan,"
     "edward,eric,ethan,george,harry,jack,james,jason,jayden,jeremy,jesse,"
     "john,jordan,joseph,joshua,kyle,liam,logan,luke,mason,matthew,nathan,"

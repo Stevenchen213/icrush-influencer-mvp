@@ -101,20 +101,40 @@ def detect_occupation(bio: str, category: str | None) -> str | None:
     return None
 
 
-def detect_male_by_name(full_name: str = "") -> str | None:
-    """Check if the first token of a fullName matches known male first names.
+def detect_male_by_name(full_name: str = "", bio: str = "", username: str = "") -> str | None:
+    """Check fullName, bio, and username for male signals.
 
     Returns a reason string if likely male, or None.
     Couple names (e.g. 'Anna & Tom') are NOT rejected — only solo male names.
     """
-    if not full_name:
+    if not full_name and not bio and not username:
         return None
 
-    # Remove non-alpha characters, split into tokens
-    tokens = re.split(r"[^a-zA-ZäöüÄÖÜß]+", full_name.lower().strip())
+    name_lower = full_name.lower().strip()
+    bio_lower = (bio or "").lower()
+    user_lower = (username or "").lower()
+
+    # Title/honorific-based male detection (full_name, bio, username)
+    _male_titles = ["mr ", "mr.", "herr ", "papa ", "vater ", "ehemann ",
+                    "bruder ", "onkel ", "sohn ", "husband", "father ",
+                    "dad ", "daddy", "trans mann"]
+    for title in _male_titles:
+        if name_lower.startswith(title) or title in name_lower:
+            return f"男博主（称呼: {title.strip()}）"
+        if title in bio_lower:
+            return f"男博主（bio 含: {title.strip()}）"
+        if title in user_lower:
+            return f"男博主（username 含: {title.strip()}）"
+
+    # Scan full_name + username for male first names
+    scan_text = name_lower + " " + user_lower
+    tokens = re.split(r"[^a-zA-ZäöüÄÖÜß]+", scan_text)
 
     male_hits = [t for t in tokens if t in MALE_FIRST_NAMES]
-    female_candidates = [t for t in tokens if t.endswith("a") or t.endswith("e")]
+    # Female guard: tokens ending in a/e, >1 char, <=5 chars
+    # (excludes single chars like "e" from "germain_e", longer surnames like "Fossa")
+    female_candidates = [t for t in tokens
+                         if (t.endswith("a") or t.endswith("e")) and 2 <= len(t) <= 4]
 
     if not male_hits:
         return None
@@ -128,8 +148,8 @@ def detect_male_by_name(full_name: str = "") -> str | None:
         first = tokens[0]
         return f"男博主（名字: {first}）"
 
-    # Multiple tokens, all identified names are male, no female indicators
-    if male_hits and not female_candidates:
+    # Male hits dominate female candidates → male
+    if male_hits and len(male_hits) >= len(female_candidates):
         return f"男博主（名字: {', '.join(male_hits)}）"
 
     return None

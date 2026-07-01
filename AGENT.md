@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.8.3**
+当前版本：**v0.9.0**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -158,20 +158,20 @@ docs/
 
 ---
 
-## 当前会话状态（2026-06-30）
+## 当前会话状态（2026-07-01）
 
-### v0.8.3 更新（今日）
-- **种子去重**：`run_full_workflow.py` / `run_batch_seeds.py` 批次内+跨批次去重（`data/seeds_processed.txt`），`--force` 强制重跑
-- **Scroll 修复**：`fetch_similar_accounts_v3.mjs` 额外懒加载等待（400±300ms）+ 每10次1.5s喘息 + 放弃阈值 4→6
-- **二次判断表优化**：排除"🟡 已入库"（原仅排除"❌ 否"），仅同步需人工判断的结果
-- **SOP 文档**：`docs/达人二次判断-SOP.md` + `scripts/feishu_create_sop_doc.py` 自动生成飞书文档
-- **飞书 App 权限**：新增 `docx:document` 权限
-- **批量跑结果**：4 种子 → 251 个 profile → 37 ✅ 是 / 28 🟡 复查 / 12 🟡 推荐置换
-- **GitHub push** ✅
+### v0.9.0 更新（今日）— STAGE 1 智能品类拦截
+- **Bio 品类负向词过滤**：`wordlists.py` 新增 `BIO_CATEGORY_BLOCKLIST`（9 类别 270+ 关键词），`judges.py` 新增 `is_wrong_category()`
+- **白名单优先**：fashion/beauty/outfit/schmuck 等关键词直接放行，防止误杀
+- **激进 vs 保守**：心理/音乐/宗教/医疗/宠物/家居/教育→1命中即淘汰；母婴/美食→2命中淘汰（不含 "mama"）
+- **品牌检测增强**：新增 40+ 商业/机构信号（Restaurant/Hotel/ Institut/ geöffnet...）
+- **男性检测增强**：覆盖 username + bio + 称呼前缀（Mr/Herr/Daddy/Husband），补 20+ 男名
+- **旅游类放行**：旅行博主不拦，酒店度假村官号走品牌检测
+- **基于 270 条人工反馈训练**：预期拦截 60-70% 被拒案例
 
-### v0.8.2 更新
-- 品牌过滤修复 / 抓取失败 bug 修复 / 飞书 token 自动刷新
-- Chrome CDP 可靠性 / 人工复查地区检查 / run_batch_seeds.py 通用化
+### v0.8.3 更新
+- 种子去重 / Scroll 修复 / 二次判断表优化 / SOP 文档 / 飞书 App 权限
 
 ### 待办
 - [ ] Wednesday 配额重置后刷新缓存（7/1）
+- [ ] 飞书 webhook 集成

@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.8.3 (2026-06-30)
+**当前版本**：v0.9.0 (2026-07-01)
 
 ## 完整工作流
 
@@ -35,31 +35,51 @@ python scripts/run_batch_seeds.py data/seeds.txt --budget 40
 
 详细方法见 **[docs/similar_accounts_guide.md](docs/similar_accounts_guide.md)**
 
-## 硬性规则
+## 硬性规则（STAGE 1 短路淘汰）
 
 | # | 条件 | 阈值 |
 |---|------|------|
-| 1 | 男博主 | 名字匹配 DE/EN/TR 男名 → ❌（情侣名不拒） |
-| 2 | 品牌/媒体号 | 用户名/简介含品牌标识（_de, .de, official, shop 等）→ ❌ |
-| 3 | 私密账户 | → ❌ |
-| 4 | 帖数 | < 200（IG reel >50% 可豁免到 150） |
-| 5 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
-| 6 | Caption 德语 | ≥ 25%（bio DE 时），不足则 🟡 复查 |
-| 7 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
-| 8 | 浏览量 | ≥4000 / 2000-3999 / <2000（仅计 Reel/Video；无视频帖 → 🟡 人工复查） |
-| 9 | 男粉占比 | ≤50%（>100K 放宽到 ≤65%） |
+| 1 | 白名单 | fashion/beauty/outfit/schmuck → 优先放行 |
+| 2 | 品类不符 | 9 类 270+ 负向关键词扫描（见下表） |
+| 3 | 男博主 | 名字 + bio + username + 称呼前缀三重检测 |
+| 4 | 品牌/商业号 | bio 商业信号打分 ≥3（offiziell, hotel, restaurant, kundinnen...） |
+| 5 | 私密账户 | → ❌ |
+| 6 | 帖数 | < 200（IG reel >50% 可豁免到 150） |
+| 7 | 粉丝 | IG 1K-300K / TT 1K-500K（<10K 置换组） |
+| 8 | Caption 德语 | ≥ 25%（bio DE 时），不足则 🟡 复查 |
+| 9 | 地区 | Wednesday 优先，fallback: bio DE/AT + caption ≥25% |
+| 10 | 浏览量 | ≥4000 / 2000-3999 / <2000（仅计 Reel/Video） |
+| 11 | 男粉占比 | ≤50%（>100K 放宽到 ≤65%） |
+
+### 品类拦截矩阵
+
+| 类别 | 触发数 | 示例 |
+|------|--------|------|
+| 🔴 心理/身心灵 | 1 命中 | psycholog, therap, adhs, meditation, healing |
+| 🔴 音乐/DJ/演出 | 1 命中 | dj, festival, booking@, sänger, band |
+| 🔴 宗教/教会 | 1 命中 | jesus, kirche, church, gospel, bible |
+| 🔴 医疗/健康 | 1 命中 | arzt, medizin, patient, clinic, aerztin |
+| 🔴 宠物/动物 | 1 命中 | hund, katze, dog, horse, tierschutz |
+| 🔴 家居/DIY | 1 命中 | diy, möbel, interior, cleaning |
+| 🔴 教育 | 1 命中 | lehrerin, kurs, workshop, academy |
+| 🟡 母婴 | 2 命中 | mamablog, erziehung, familienblog（不含 mama） |
+| 🟡 美食 | 2 命中 | rezept, foodblog, kochen, restaurant |
+| ✅ 旅游 | 放行 | 旅行博主不拦，酒店走品牌检测 |
+
+> 基于 270 条人工反馈训练，预期拦截 60-70% 第一轮被拒案例。
 
 完整规则：**[docs/rules.md](docs/rules.md)**
 
 ## Pipeline 流程
 
 ```
-STAGE 0  → KOL 查重（阿里云 API 4库 + 飞书结果表，check_only 只查不写）+ 本地排除名单
-STAGE 1  → Apify 抓 Profile → 短路淘汰（含品牌号检测）+ Apify 结果缓存
-STAGE 1.5 → Wednesday 受众查询（@用户名 + social_media.username 精确匹配，fallback: all 全字段搜索）
-STAGE 2  → IG: Reel Scraper 抓 40 条 Reel（近3月），取前 10 条算浏览量 / TT: 20 条 → 3 月过滤
-         → 浏览量 + caption 德语率 + 近3月商单 → 最终判定 ✅/❌/🟡置换/🟡复查
-         → 飞书多维表格自动同步: 主结果表（排除已入库）+ 二次判断表（排除已入库+❌否）
+STAGE 0  → KOL 查重（阿里云 API 4库 + 飞书结果表，check_only 只查不写）
+STAGE 1  → Apify 抓 Profile → 品类负向词 + 品牌检测 + 男性识别 + 硬指标
+        → 白名单优先：fashion/beauty 等美学词直接放行
+STAGE 1.5 → Wednesday 受众查询（@用户名精确优先，fallback: all 全字段搜索）
+STAGE 2  → IG: Reel Scraper 抓 40 条 Reel（近3月）/ TT: 20 条 → 3 月过滤
+         → 浏览量 + caption 德语率 + 近3月商单 → 最终判定
+         → 飞书自动同步: 主结果表 + 二次判断表
 ```
 
 ## 飞书多维表格自动同步
@@ -97,7 +117,7 @@ icrush-influencer-mvp/
 │   ├── judges.py               → 短路淘汰 + caption 判定
 │   ├── classifier.py           → 商单分类（美妆/服饰/珠宝/食品/科技）
 │   ├── language.py             → 语言检测 + 地区识别 + 性别判断
-│   ├── wordlists.py            → 词典（城市/男名）
+│   ├── wordlists.py            → 词典（9类品类负向词270+ / 城市 / 男名191）
 │   ├── wednesday.py            → 缓存读写 + 自动实时查询
 │   ├── dedup.py                → KOL 查重 API
 │   ├── apify.py                → Apify API 客户端
@@ -194,31 +214,9 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
 - **v0.7.1** (2026-06-24)：**重大更新**
   - 发现 IG 类似账户新方法（三步弹窗法），每种子 ~80 达人，免费
   - 删除所有旧发现方式（hashtag/snowball/suggested/Wednesday discovery）
-  - 删除 STAGE 3 评论检查（死代码）
-  - 新增 `--auto-pipeline` 一键全自动
-  - 删除 drissionpage 依赖
-  - 配置文件精简
-- **v0.8.3** (2026-06-30)：
-  - 种子去重：批次内 + 跨批次（`seeds_processed.txt`），`--force` 强制重跑
-  - Scroll 修复：额外懒加载等待 + 放弃阈值 4→6
-  - 二次判断表优化：排除"已入库"，仅同步需人工判断的结果
-  - 达人二次判断 SOP 文档 + 飞书文档生成脚本
-  - 批量预算控制：`run_batch_seeds.py --budget`
-- **v0.8.2** (2026-06-30)：
-  - 飞书 token 自动刷新：`_get_feishu_token()` 过期前 5 分钟自动换新
-  - Chrome CDP 可靠性：深度健康检测（开测试标签页）+ 提取失败自动重启
-  - 品牌过滤修复：bio/username 信号分离，防止邮箱 `.de` 误杀
-  - 抓取失败 bug 修复：缓存合并防御性校验
-  - 人工复查地区检测：无视频帖也查 bio 地区
-- **v0.8.0** (2026-06-29)：
-  - 品牌/媒体号自动过滤：STAGE 1 打分制检测
-  - Wednesday 搜索修复：`@用户名 + social_media.username` 精确优先
-  - Apify 结果缓存：`data/apify_cache/` 文件缓存
-  - IG 帖子优化：抓 20 条，无视频 → 🟡 人工复查
-  - GBK 编码全项目修复
-- **v0.7.2** (2026-06-26)：
-  - Chrome CDP 根因修复：`--user-data-dir` 替代 `--profile-directory`（Chrome 136+ 兼容）
-  - 提取脚本三修复：See all 选择器 / 滚动容器 / 提前停止
-  - 新增 `ensure_chrome_cdp.py`：自动检测/启动/恢复 Chrome CDP
-  - 部署配置文档：README 安装步骤 + 路径变量说明
-  - 无 See all 时快速跳过（≤3 账号 → 6 次滚动后放弃）
+- **v0.9.0** (2026-07-01)：**智能品类拦截**
+  - Bio 品类负向词过滤：9 类别 270+ 关键词，白名单优先防误杀
+  - 基于 270 条人工反馈训练，预期拦截 60-70% 第一轮被拒案例
+  - 品牌检测增强 40+ 商业信号，男性检测三重覆盖
+  - 旅游类放行，酒店品牌走品牌检测
+- **v0.8.3** (2026-06-30)：种子去重 / Scroll 修复 / 二次判断表优化 / SOP 文档
