@@ -743,6 +743,9 @@ class Pipeline:
         from icrush.apify_cache import cache_key, get_cached, set_cache, is_cache_enabled
 
         # ── Check cache before Apify ──
+        # Save full survivor lists — cached users still need verdicts in Stage 2
+        all_tt_survivors = list(tt_survivors)
+        all_ig_survivors = list(ig_survivors)
         cached_tt_posts: dict[str, list] = {}
         cached_ig_posts: dict[str, list] = {}
 
@@ -846,8 +849,8 @@ class Pipeline:
 
         three_months_ago = datetime.now(timezone.utc) - timedelta(days=90)
 
-        # Process TT survivors
-        for u in tt_survivors:
+        # Process TT survivors (including cached)
+        for u in all_tt_survivors:
             p = tt_profiles[u]
             posts = tt_posts_by_user.get(u, [])
             wd_key = f"TT:{u}"
@@ -913,8 +916,8 @@ class Pipeline:
                 "urls": [x["url"] for x in posts if x.get("url")],
             }
 
-        # Process IG survivors
-        for u in ig_survivors:
+        # Process IG survivors (including cached)
+        for u in all_ig_survivors:
             p = ig_profiles[u]
             wd_key = f"IG:{u}"
             wd = wednesday_data.get(wd_key, {"found": False})

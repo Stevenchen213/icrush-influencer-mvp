@@ -105,8 +105,7 @@ icrush/
   classifier.py            # 商单分类
   report.py                # Markdown 表格输出
   dedup.py                 # KOL 查重 API
-  gender.py                # 头像性别检测（Claude Vision）
-  airtable.py / feishu.py # 排除名单 + 飞书结果同步（查重+append）
+  feishu.py               # 飞书结果同步 + 二次判断表
   apify.py                 # Apify API 客户端
   apify_cache.py           # Apify 结果文件缓存（崩溃恢复省费用）
   config.py                # 阈值常量
@@ -153,11 +152,9 @@ docs/
 - IG 为主，TT 也可以
 - 反目标：民族服饰 / 游戏 / 食物 / 亲子 / 炫富 / 品牌创始人 / 品牌官方号 / 宠物 / DIY
 
-### 查重机制（四重）
+### 查重机制（双重）
 - 阿里云 API（主）：`POST {account, platform, developer_name, check_only: true}` → 对比 4 库（KOL总表/KOC红人库/实习生表/AWS KOC），只查不写
 - 飞书结果表查重：查询达人筛选结果表已有用户 → 命中则跳过
-- Airtable / 飞书排除名单（fallback）：lookup by username
-- 本地文件 `data/exclusion_list.json`
 
 ---
 

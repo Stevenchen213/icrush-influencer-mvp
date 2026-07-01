@@ -54,12 +54,6 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 # Exclusion file
 EXCLUSION_FILE: Path = DATA_DIR / "exclusion_list.json"
 
-# Airtable exclusion
-# Base: appmvJMccHqkAUwg8, Table: tbl8G3lCOugPLxNjr (5992 records)
-AIRTABLE_BASE_ID: str = "appmvJMccHqkAUwg8"
-AIRTABLE_TABLE_ID: str = "tbl8G3lCOugPLxNjr"
-AIRTABLE_TOKEN: str = os.environ.get("AIRTABLE_TOKEN", "")
-
 # 飞书 exclusion
 # Base/Table: 通过环境变量配置，硬编码值仅作 fallback
 FEISHU_BASE_ID: str = os.environ.get("FEISHU_BASE_ID", "TgzJbUV0taC8VVsOyndcUp69nEh")

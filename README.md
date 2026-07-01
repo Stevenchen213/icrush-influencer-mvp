@@ -103,8 +103,7 @@ icrush-influencer-mvp/
 │   ├── apify.py                → Apify API 客户端
 │   ├── report.py               → Markdown 表格输出
 │   ├── config.py               → 阈值常量
-│   ├── gender.py               → 头像性别检测（Claude Vision）
-│   └── airtable.py / feishu.py → 排除名单 fallback
+│   └── feishu.py               → 飞书结果同步 + 二次判断表
 ├── scripts/
 │   ├── run_batch.py            → Pipeline 主入口
 │   ├── run_full_workflow.py    → 端到端编排（CDP→提取→pipeline，含重试）

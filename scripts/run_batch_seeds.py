@@ -113,7 +113,7 @@ for i, seed in enumerate(seeds):
         fail += 1
 
     after = get_today_spend()
-    delta = after - current if current > 0 else 0
+    delta = after - current
     print(f"  $ ~${delta:.3f} | today: ${after:.2f}")
 
 final = get_today_spend()

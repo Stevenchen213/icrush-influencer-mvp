@@ -44,8 +44,8 @@ Python >=3.11 | httpx, langdetect, playwright, python-dotenv
 icrush/
   pipeline.py              # 三阶段编排（STAGE 0→1→1.5→2）
   judges.py / language.py / classifier.py / report.py
-  wednesday.py / dedup.py / apify.py / config.py / gender.py
-  feishu.py                # 排除名单 + 结果同步（查重+append）
+  wednesday.py / dedup.py / apify.py / config.py
+  feishu.py                # 飞书结果同步 + 二次判断表
 
 scripts/
   run_batch.py                     # Pipeline 主入口
