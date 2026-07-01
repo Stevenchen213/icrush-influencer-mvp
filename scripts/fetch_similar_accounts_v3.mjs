@@ -183,10 +183,13 @@ async function extractSimilarAccounts(page, seed, cfg) {
   // Step 3: Click "查看全部" / "See all"
   // Search within the dialog/modal that appeared after clicking Similar accounts
   console.log("  [3/4] Clicking 'See all'...");
-  // Try multiple strategies to find the right "See all" link
-  let seeAll = page.locator('[role="dialog"] a, [role="dialog"] span').filter({
-    hasText: /^查看全部$|^See [Aa]ll$|^View [Aa]ll$/,
+  // Try multiple strategies — IG sometimes renders dialog without role attr,
+  // or uses a div/button instead of a/span.
+  let seeAll = page.locator('a, span, button, div[role="button"]').filter({
+    hasText: /(查看全部|See [Aa]ll|View [Aa]ll)/,
   });
+  // Narrow to visible, prefer ones inside a dialog or near the bottom of page
+  seeAll = seeAll.locator('visible=true');
   if ((await seeAll.count()) === 0) {
     // Fallback: look for any short-text element with the target text
     seeAll = page.locator("a, span, button").filter({
@@ -261,8 +264,8 @@ async function extractSimilarAccounts(page, seed, cfg) {
     }
     prevLinkCount = currentCount;
 
-    // Quick abandon: no See all + very few accounts → skip this seed
-    if (!hasSeeAll && i >= 5 && currentCount <= 3) {
+    // Quick abandon: no See all + very few accounts after several scrolls → skip this seed
+    if (!hasSeeAll && i >= 8 && currentCount <= 5) {
       console.log(`    Only ${currentCount} accounts, no See all — skipping seed.`);
       return [];
     }
