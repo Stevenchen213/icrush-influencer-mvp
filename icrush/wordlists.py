@@ -247,6 +247,8 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "reiterhof", "reitschule",
         "hundetrainer", "hundeschule", "hundeblog",
         "welpen", "canine", "katzenblog",
+        "dog trainer", "dog training", "dog walking",
+        "hundetraining", "hundebetreuung",
     ],
     # ── 家居 / DIY / 装修 / 清洁 ──
     "家居/DIY/清洁": [
