@@ -235,16 +235,18 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
     ],
     # ── 宠物 / 动物 ──
     "宠物/动物": [
-        "hund ", "hunde", "katzen",
+        "hund", "hunde", "katzen",
         "tierarzt", "tierärztin", "tierheim",
         "tierschutz", "haustier",
         "fellnase", "samojede",
-        "ridgeback", "dog ", "dogs",
+        "ridgeback", "dog", "dogs",
         "pfote", "tierisch",
         "züchter", "hunderasse",
         "horse", "pferd",
         "animal", "pet ",
         "reiterhof", "reitschule",
+        "hundetrainer", "hundeschule", "hundeblog",
+        "welpen", "canine", "katzenblog",
     ],
     # ── 家居 / DIY / 装修 / 清洁 ──
     "家居/DIY/清洁": [
