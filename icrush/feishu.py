@@ -199,7 +199,7 @@ def _build_fields(
         "帖数": r.get("posts"),
         "地区准确性": r.get("regionAccurate", ""),
         "近三月平均浏览量": r.get("avgViews"),
-        "女粉占比": r.get("genderFemale"),
+        "女粉占比": r.get("genderFemale") if r.get("genderFemale") is not None else "无信息",
         "Caption德语占比": r.get("_captionDePct"),
         "达人链接": {"link": f"https://www.instagram.com/{r.get('name', '')}/"} if r.get("platform") == "IG" else {"link": f"https://www.tiktok.com/@{r.get('name', '')}"},
         "近3月商单": format_commercial_stats(r.get("commercialStats")),
@@ -419,7 +419,7 @@ RESULTS_TABLE_SCHEMA = [
     {"field_name": "帖数", "type": 2},
     {"field_name": "地区准确性", "type": 1},
     {"field_name": "近三月平均浏览量", "type": 2},
-    {"field_name": "女粉占比", "type": 2},
+    {"field_name": "女粉占比", "type": 1},                 # 1 = Text ("无信息" when no Wednesday data)
     {"field_name": "Caption德语占比", "type": 2},
     {"field_name": "近3月商单", "type": 1},
     {"field_name": "判定结果", "type": 3,
@@ -444,7 +444,7 @@ REVIEW_TABLE_SCHEMA = [
     {"field_name": "粉丝数量", "type": 2},                 # 2 = Number
     {"field_name": "帖数", "type": 2},
     {"field_name": "近三月平均浏览量", "type": 2},
-    {"field_name": "女粉占比", "type": 2},
+    {"field_name": "女粉占比", "type": 1},                 # 1 = Text ("无信息" when no Wednesday data)
     {"field_name": "地区准确性", "type": 1},
     {"field_name": "Caption德语占比", "type": 2},
     {"field_name": "近3月商单", "type": 1},
