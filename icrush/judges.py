@@ -193,7 +193,7 @@ def judge_from_caption(
         if view_status == "replace":
             rs.append(f"平均浏览 {avg_views:,} 在 2000-4000")
         return {
-            "verdict": "🟡 置换组",
+            "verdict": "🟡 推荐置换",
             "reason": "; ".join(rs),
             "regionAccurate": region_accurate,
         }

@@ -887,7 +887,7 @@ class Pipeline:
                         "platform": "TT", "name": u, "fans": p["fans"], "posts": p["posts"],
                         "regionAccurate": region_acc, "avgViews": avg_views,
                         "genderFemale": gender_female, "commercialStats": commercial_stats,
-                        "verdict": "🟡 置换组", "reason": "; ".join(rs),
+                        "verdict": "🟡 推荐置换", "reason": "; ".join(rs),
                     }
                 else:
                     self.results[wd_key] = {
@@ -977,7 +977,7 @@ class Pipeline:
                         "platform": "IG", "name": u, "fans": p["fans"], "posts": p["posts"],
                         "regionAccurate": region_acc, "avgViews": avg_views,
                         "genderFemale": gender_female, "commercialStats": commercial_stats,
-                        "verdict": "🟡 置换组", "reason": "; ".join(rs),
+                        "verdict": "🟡 推荐置换", "reason": "; ".join(rs),
                     }
                 else:
                     self.results[wd_key] = {

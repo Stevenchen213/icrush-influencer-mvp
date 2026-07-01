@@ -427,7 +427,7 @@ RESULTS_TABLE_SCHEMA = [
          {"name": "✅ 是", "color": 0},
          {"name": "❌ 否", "color": 1},
          {"name": "🟡 复查", "color": 2},
-         {"name": "🟡 置换组", "color": 3},
+         {"name": "🟡 推荐置换", "color": 3},
          {"name": "⚠️ 抓取失败", "color": 4},
          {"name": "🟡 已入库", "color": 5},
      ]}},
