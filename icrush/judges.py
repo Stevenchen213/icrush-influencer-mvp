@@ -207,14 +207,14 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     # "creator", "influencer", "blogger", "lifestyle", "model", "pflege"
     # are REMOVED — they appear in ALL niches and were preventing legitimate
     # category blocking (e.g. "Home Creator" skipped 家居 detection).
+    # Jewelry-specific words intentionally EXCLUDED — they're more likely
+    # to signal a jewelry brand/seller than a personal fashion influencer.
     FASHION_SAFE_WORDS = {
         "fashion", "beauty", "makeup", "make-up", "skincare", "hautpflege",
-        "schmuck", "jewelry", "jewellery", "outfit", "outfits", "ootd",
+        "outfit", "outfits", "ootd",
         "mode", "style", "styling", "lookbook", "streetstyle",
         "nagel", "nails", "nägel", "friseur", "friseurin", "haare", "hair",
         "cosmetic", "kosmetik", "parfüm", "duft", "fragrance",
-        "gold", "silber", "silver", "kette", "halskette", "ohrringe",
-        "armband", "bracelet", "ring", "ringe",
         "lippenstift", "mascara", "foundation", "nagellack",
         "augenbrauen", "brows", "lashes", "haircare",
     }
