@@ -198,6 +198,7 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
         "心理/咨询/治疗", "音乐/演出", "宗教/教会",
         "医疗/健康", "家居/DIY/清洁",
         "教育/知识付费", "美食/烹饪",
+        "宠物/动物",
     }
 
     for category, keywords in BIO_CATEGORY_BLOCKLIST.items():

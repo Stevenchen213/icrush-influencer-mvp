@@ -297,6 +297,11 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "dressur", "reitsport", "pferdeliebe",
         "dogmom", "catmom", "hundemama", "katzenmama",
         "haustiere", "tierliebe", "tierwelt",
+        # v0.9.1 batch3: horse/farm animal gaps
+        "pferdetraining", "pferdemädchen", "equestrian",
+        "stall", "pferdehaltung", "pferdeblog",
+        "wachtel", "wachteln", "küken", "hühner",
+        "landleben", "bauernhof",
     ],
     # ── 家居 / DIY / 装修 / 清洁 ──
     "家居/DIY/清洁": [
