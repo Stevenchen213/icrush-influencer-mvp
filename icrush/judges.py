@@ -64,6 +64,7 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     # Weak signals (1 pt — must combine with others)
     ("shop", 1), ("store", 1), ("beauty", 1),
     ("edeka", 2), ("rewe", 2), ("lidl", 2), ("aldi", 2),
+    ("official account", 2), ("brautmode", 2),
     ("geschäft", 1), ("markt", 1), ("bedarf", 1),
     ("eröffnungszeiten", 1), ("filiale", 1),
     ("instagram.com/", -10),   # never penalize bio links

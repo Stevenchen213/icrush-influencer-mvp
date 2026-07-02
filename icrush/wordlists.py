@@ -196,6 +196,11 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "mamaleben", "mamasein", "familienzeit",
         "geschwister", "kindergeburtstag",
         "mutterliebe", "elternsein",
+        # v0.9.1 batch2: from PASS-SUSPICIOUS scan
+        "zwillingsmama", "beikost", "blw",
+        "elternzeit", "elterngeld", "pflegefamilie",
+        "mamagedanken", "mamagefühle", "mama-modus",
+        "mamaleben", "familienhotel",
     ],
     # ── 美食 / 烹饪 / 食谱 / 餐厅 ──
     "美食/烹饪": [
@@ -216,6 +221,10 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "lecker", "schmeckt", "foodstagram",
         "rezeptideen", "kuechenliebe",
         "schnelle küche", "familienküche",
+        # v0.9.1 batch2
+        "brotdosen", "snackideen", "zuckerfrei",
+        "beikost", "breifrei", "baby led weaning",
+        "foodspots", "foodguide", "restaurantguide",
     ],
     # ── 宗教 / 教会 / 灵性 ──
     "宗教/教会": [
@@ -305,6 +314,11 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "homedeko", "wohnideen", "wohninspo",
         "garderobe", "innenarchitektur",
         "akustikpaneele", "wandgestaltung",
+        # v0.9.1 batch2
+        "umbau", "kernsanierung", "baustelle",
+        "kinderzimmer", "badezimmer", "umbauen",
+        "resthof", "altbau", "sanierung",
+        "home living", "deko inspiration",
     ],
     # ── 教育 / 教师 / 知识付费 ──
     "教育/知识付费": [
@@ -325,6 +339,9 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "erzieher", "kinderbetreuung",
         "lernmaterial", "unterrichtsmaterial",
         "padlet", "eduki",
+        # v0.9.1 batch2
+        "montessori", "kindertagespflege",
+        "kinderschutz", "verfahrensbeistand",
     ],
 }
 
