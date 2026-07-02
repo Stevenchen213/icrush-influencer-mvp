@@ -140,7 +140,7 @@ def is_brand_account(profile: dict) -> bool:
         "product", "shopping", "retail", "grocery",
         "restaurant", "hotel", "resort", "hospital",
         "clinic", "pharmacy", "school", "university",
-        "government", "public figure", "news", "media",
+        "government", "news", "media",
         "tv", "radio", "publisher", "magazine",
         "community", "charity", "church", "religious",
         "sports team", "stadium", "arena",
