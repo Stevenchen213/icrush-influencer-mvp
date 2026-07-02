@@ -226,16 +226,8 @@ def _build_review_fields(
     """
     fields = _build_fields(r, unique_username, date_str, batch_id)
 
-    # Review-specific columns — empty, humans fill these in Feishu UI
-    if "其他反馈" not in fields:
-        fields["其他反馈"] = ""
-    if "二次判定" not in fields:
-        fields["二次判定"] = ""
-    if "淘汰反馈" not in fields:
-        fields["淘汰反馈"] = ""
-    if "人员分配" not in fields:
-        fields["人员分配"] = ""
-
+    # Only pipeline-generated fields — human columns (二次判定/淘汰反馈/其他反馈/人员分配)
+    # already exist in the table and will be left blank for new records.
     return fields
 
 
