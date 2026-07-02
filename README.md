@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.9.0 (2026-07-01)
+**当前版本**：v0.9.1 (2026-07-02)
 
 ## 完整工作流
 
@@ -59,12 +59,14 @@ python scripts/run_batch_seeds.py data/seeds.txt --budget 40
 | 🔴 音乐/DJ/演出 | 1 命中 | dj, festival, booking@, sänger, band |
 | 🔴 宗教/教会 | 1 命中 | jesus, kirche, church, gospel, bible |
 | 🔴 医疗/健康 | 1 命中 | arzt, medizin, patient, clinic, aerztin |
-| 🔴 宠物/动物 | 1 命中 | hund, katze, dog, horse, tierschutz |
-| 🔴 家居/DIY | 1 命中 | diy, möbel, interior, cleaning |
-| 🔴 教育 | 1 命中 | lehrerin, kurs, workshop, academy |
+| 🔴 宠物/动物 | 1 命中 | pferd, hundetrainer, tierarzt, dog training |
+| 🔴 家居/DIY | 1 命中 | diy, interior, hausbau, einrichten, möbel |
+| 🔴 教育 | 1 命中 | lehrerin, kurs, workshop, academy, schule |
+| 🔴 美食/烹饪 | 1 命中 | rezept, kochen, foodblog, gerichte, restaurant |
 | 🟡 母婴 | 2 命中 | mamablog, erziehung, familienblog（不含 mama） |
-| 🟡 美食 | 2 命中 | rezept, foodblog, kochen, restaurant |
 | ✅ 旅游 | 放行 | 旅行博主不拦，酒店走品牌检测 |
+
+> 整词匹配保护：≤5字符关键词必须作为独立单词出现，防止子串误杀（如 "stall" 不匹配 "Kristall"）。
 
 > 基于 270 条人工反馈训练，预期拦截 60-70% 第一轮被拒案例。
 
@@ -214,6 +216,12 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
 - **v0.7.1** (2026-06-24)：**重大更新**
   - 发现 IG 类似账户新方法（三步弹窗法），每种子 ~80 达人，免费
   - 删除所有旧发现方式（hashtag/snowball/suggested/Wednesday discovery）
+- **v0.9.1** (2026-07-02)：**品类检测全面加固**
+  - 白名单去泛词（移除 creator/influencer/blogger 等），改整词匹配
+  - 品类关键词≤5字符统一整词匹配，消除子串误伤
+  - 美食+宠物改为激进(1命中)，全品类 ~180 新关键词
+  - 品牌检测增强（label/brand/连锁品牌），商单分类器整词修复
+  - 基于 150+ 真实 bio 扫描验证
 - **v0.9.0** (2026-07-01)：**智能品类拦截**
   - Bio 品类负向词过滤：9 类别 270+ 关键词，白名单优先防误杀
   - 基于 270 条人工反馈训练，预期拦截 60-70% 第一轮被拒案例

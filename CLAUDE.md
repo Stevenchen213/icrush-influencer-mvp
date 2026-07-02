@@ -5,7 +5,7 @@
 
 ## 项目概况
 
-**ICRUSH v0.9.0** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+**ICRUSH v0.9.1** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
 
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
@@ -85,11 +85,11 @@ docs/
 | 🔴 音乐/DJ/演出 | 1 | dj, festival, booking@, sänger, band |
 | 🔴 宗教/教会 | 1 | jesus, kirche, church, gospel, bible |
 | 🔴 医疗/健康 | 1 | arzt, medizin, patient, clinic, aerztin |
-| 🔴 宠物/动物 | 1 | hund, katze, dog, horse, tierschutz |
-| 🔴 家居/DIY | 1 | diy, möbel, interior, cleaning, renovation |
+| 🔴 宠物/动物 | 1 | pferd, hundetrainer, tierarzt, dog training |
+| 🔴 家居/DIY | 1 | diy, interior, hausbau, einrichten, möbel |
 | 🔴 教育 | 1 | lehrerin, kurs, workshop, academy, schule |
 | 🟡 母婴 | 2 | mamablog, erziehung, familienblog（不含 mama） |
-| 🟡 美食 | 2 | rezept, foodblog, kochen, restaurant, kitchen |
+| 🔴 美食/烹饪 | 1 | rezept, kochen, foodblog, gerichte, restaurant |
 
 品牌检测：bio 商业信号打分 ≥3 分 → 淘汰（offiziell, hotel, restaurant, kundinnen, bestellung...）
 男性检测：名字 + bio + username + 称呼前缀（Mr, Herr, Daddy, Husband...）

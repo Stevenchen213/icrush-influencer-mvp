@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.9.0**
+当前版本：**v0.9.1**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -160,14 +160,15 @@ docs/
 
 ## 当前会话状态（2026-07-01）
 
-### v0.9.0 更新（今日）— STAGE 1 智能品类拦截
-- **Bio 品类负向词过滤**：`wordlists.py` 新增 `BIO_CATEGORY_BLOCKLIST`（9 类别 270+ 关键词），`judges.py` 新增 `is_wrong_category()`
-- **白名单优先**：fashion/beauty/outfit/schmuck 等关键词直接放行，防止误杀
-- **激进 vs 保守**：心理/音乐/宗教/医疗/宠物/家居/教育→1命中即淘汰；母婴/美食→2命中淘汰（不含 "mama"）
-- **品牌检测增强**：新增 40+ 商业/机构信号（Restaurant/Hotel/ Institut/ geöffnet...）
-- **男性检测增强**：覆盖 username + bio + 称呼前缀（Mr/Herr/Daddy/Husband），补 20+ 男名
-- **旅游类放行**：旅行博主不拦，酒店度假村官号走品牌检测
-- **基于 270 条人工反馈训练**：预期拦截 60-70% 被拒案例
+### v0.9.1 更新（今日）— 品类检测全面加固
+- **整词匹配**：白名单+品类+分类器三层统一，≤5字符关键词必须独立成词
+- **白名单去泛词**：移除 creator/influencer/blogger/model/lifestyle/pflege/look
+- **品类关键词大扩充**：~180 新关键词（基于 150+ 真实 bio 扫描验证）
+- **美食+宠物改激进**：1命中即淘汰
+- **品牌检测增强**：+label/brand/连锁品牌检测，商单分类器短品牌名修复
+- **全 9 品类已覆盖**：心理/母婴/美食/宗教/音乐/医疗/宠物/家居/教育
+
+### v0.9.0 更新 — STAGE 1 智能品类拦截
 
 ### v0.8.3 更新
 - 种子去重 / Scroll 修复 / 二次判断表优化 / SOP 文档 / 飞书 App 权限

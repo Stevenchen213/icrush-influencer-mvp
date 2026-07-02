@@ -201,11 +201,23 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
         "宠物/动物",
     }
 
+    # Tokenize combined text for word-boundary matching of short keywords.
+    # Prevents substring false positives like "stall" in "Kristall" (crystal).
+    _cat_tokens = set(combined.replace(",", " ").replace(".", " ").replace("|", " ")
+                       .replace("/", " ").replace("-", " ").replace("&", " ").split())
+
     for category, keywords in BIO_CATEGORY_BLOCKLIST.items():
         hits = 0
         threshold = 1 if category in AGGRESSIVE_CATEGORIES else 2
         for kw in keywords:
-            if kw in combined:
+            matched = False
+            if kw in HIGH_SPECIFICITY:
+                matched = kw in combined  # long specific terms, safe for substring
+            elif len(kw) <= 5:
+                matched = kw in _cat_tokens  # word-boundary for short keywords
+            else:
+                matched = kw in combined  # substring safe for long compound words
+            if matched:
                 if kw in HIGH_SPECIFICITY:
                     hits += 3  # instant match
                 else:
