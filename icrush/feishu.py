@@ -199,7 +199,7 @@ def _build_fields(
         "帖数": r.get("posts"),
         "地区准确性": r.get("regionAccurate", ""),
         "近三月平均浏览量": r.get("avgViews"),
-        "女粉占比": r.get("genderFemale") if r.get("genderFemale") is not None else "无信息",
+        "女粉占比": r.get("genderFemale"),  # Number field: omit if None, don't send "无信息"
         "Caption德语占比": r.get("_captionDePct"),
         "达人链接": {"link": f"https://www.instagram.com/{r.get('name', '')}/"} if r.get("platform") == "IG" else {"link": f"https://www.tiktok.com/@{r.get('name', '')}"},
         "近3月商单": format_commercial_stats(r.get("commercialStats")),
