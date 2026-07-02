@@ -124,6 +124,24 @@ def is_brand_account(profile: dict) -> bool:
         elif cb in full_name:
             score += 3
 
+    # Instagram business category → strong signal (3 pts).
+    # Personal accounts never have "Organization"/"Business" as their category.
+    _ig_category: str = (profile.get("category") or "").lower()
+    _org_signals = [
+        "organization", "nonprofit", "business", "brand",
+        "product", "shopping", "retail", "grocery",
+        "restaurant", "hotel", "resort", "hospital",
+        "clinic", "pharmacy", "school", "university",
+        "government", "public figure", "news", "media",
+        "tv", "radio", "publisher", "magazine",
+        "community", "charity", "church", "religious",
+        "sports team", "stadium", "arena",
+    ]
+    for sig in _org_signals:
+        if sig in _ig_category:
+            score += 3
+            break  # one category match is enough
+
     return score >= _BRAND_THRESHOLD
 
 
