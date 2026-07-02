@@ -80,14 +80,28 @@ def classify_commercial(
         + " ".join(tagged_names)
     )
 
+    # Tokenize for word-boundary matching (prevents "mac" matching "machen")
+    _tokens = set(combined.replace(",", " ").replace(".", " ").replace("|", " ")
+                   .replace("/", " ").replace("#", " ").replace("@", " ").split())
+
     scores: dict[str, int] = {}
     for cat, data in CATEGORY_KEYWORDS.items():
         score = 0
         for brand in data["brands"]:
-            if brand.lower() in combined:
+            b = brand.lower()
+            # Short brand names (≤4 chars) use word-boundary matching to prevent
+            # substring false positives like "mac" in "machen" or "hm" in "ihm".
+            if len(b) <= 4:
+                if b in _tokens:
+                    score += 3
+            elif b in combined:
                 score += 3
         for kw in data["keywords"]:
-            if kw.lower() in combined:
+            k = kw.lower()
+            if len(k) <= 4:
+                if k in _tokens:
+                    score += 1
+            elif k in combined:
                 score += 1
         scores[cat] = score
 
