@@ -356,6 +356,9 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "buchladen", "bibliothek", "lesen", "vorlesen",
         "literatur", "schriftsteller", "schriftstellerin",
         "kurse",
+        # v0.9.2: school/institution accounts
+        # "schule" intentionally excluded — too common in mom/family bios
+        "gymnasium", "gesamtschule", "realschule",
     ],
 }
 
@@ -384,6 +387,8 @@ MALE_FIRST_NAMES: frozenset[str] = frozenset(
     "enes,eren,ferhat,furkan,hakan,hasan,huseyin,ibrahim,ismail,kadir,kaan,"
     "kemal,kerem,mehmet,mert,murat,mustafa,omer,onur,orhan,osman,"
     "selim,serdar,serkan,suleyman,tolga,ugur,umut,volkan,yasin,"
-    "yigit,yunus,yusuf"
+    "yigit,yunus,yusuf,"
+    # v0.9.2: from false-negative review
+    "taavi"
     .split(",")
 )

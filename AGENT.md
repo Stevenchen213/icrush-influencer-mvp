@@ -8,7 +8,7 @@
 ## 项目概况
 
 **ICRUSH** -- 国内办公室自动化达人筛选管线。输入 Instagram/TikTok 主页链接，按硬性条件自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
-当前版本：**v0.9.1**
+当前版本：**v0.9.2**
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
 ---
@@ -158,9 +158,21 @@ docs/
 
 ---
 
-## 当前会话状态（2026-07-01）
+## 当前会话状态（2026-07-02）
 
-### v0.9.1 更新（今日）— 品类检测全面加固
+### v0.9.2 更新（今日）— 品牌检测 + 品类补漏 + 分类器修复
+- **品牌检测增强**：verein 权重 2→3，新增 15+ 协会/俱乐部/狂欢节信号
+  - e.V./e. v./e.V. 注册协会、burschenverein/traditionsverein/sportverein
+  - jugendreisen/jugendreise 旅游公司、karneval/fasching 狂欢节
+  - 体育俱乐部用户名前缀：sv/fc/tsv/sc/vfl/vfb/sg（startswith 检测，≥2后缀字符）
+  - reisen 加入用户名后缀
+- **教育品类**：新增 gymnasium/gesamtschule/realschule（schule 保持排除——太泛）
+- **时尚白名单**：移除 style（太泛，与 creator/lifestyle 同理）
+- **男性检测**：复合用户名子串检测（如 "createdbytaavi" → "taavi"），新增男名 taavi
+- **商单分类器**：词边界阈值 4→5，与 is_wrong_category 对齐，修复 "ringe" 误匹配 "dringend"
+- **验证**：8 个漏网案例中 7 个已修复（besenbinder/gcg_baunatal 空 bio 无法自动检测）
+
+### v0.9.1 更新 — 品类检测全面加固
 - **整词匹配**：白名单+品类+分类器三层统一，≤5字符关键词必须独立成词
 - **白名单去泛词**：移除 creator/influencer/blogger/model/lifestyle/pflege/look
 - **品类关键词大扩充**：~180 新关键词（基于 150+ 真实 bio 扫描验证）
@@ -174,5 +186,5 @@ docs/
 - 种子去重 / Scroll 修复 / 二次判断表优化 / SOP 文档 / 飞书 App 权限
 
 ### 待办
-- [ ] Wednesday 配额重置后刷新缓存（7/1）
+- [ ] Wednesday 配额重置后刷新缓存
 - [ ] 飞书 webhook 集成

@@ -1,6 +1,6 @@
-# ICRUSH Influencer Vetting Pipeline — v0.8.2 Rules
+# ICRUSH Influencer Vetting Pipeline — v0.9.2 Rules
 
-> 最后更新: 2026-06-26
+> 最后更新: 2026-07-02
 
 ## 完整判定流程
 
@@ -29,7 +29,7 @@
 
 | # | 检查项 | 条件 | 失败→ |
 |---|--------|------|-------|
-| 1 | **男博主** | `detect_male_by_name(fullName)` 匹配男名列表（DE/EN/TR），情侣名（Anna & Tom）不拒 | ❌ 男博主 |
+| 1 | **男博主** | `detect_male_by_name(fullName, bio, username)` 四重覆盖：名字 + bio + username（含复合用户名子串检测≥5字符男名）+ 称呼前缀，情侣名不拒 | ❌ 男博主 |
 | 2 | **私密账户** | private = true | ❌ 私密 |
 | 3 | **帖数** | < 200（IG reel 占比 >50% 可豁免到 150） | ❌ 帖数 |
 | 4 | **粉丝** | < 1K 或 IG > 300K / TT > 500K | ❌ 粉丝 |
@@ -91,9 +91,10 @@
 
 ## 男博主检测
 
-- 方法：匹配 IG `fullName` 首 token 到 `MALE_FIRST_NAMES` 词库
-- 词库位置：`icrush/wordlists.py`
-- 覆盖语言：German + English + Turkish
+- 方法：四重覆盖 —— `fullName` token + `bio` + `username`（含复合用户名子串检测，≥5字符男名）+ 称呼前缀
+- 复合用户名：如 `createdbytaavi` 中 `taavi` 通过子串匹配识别
+- 词库位置：`icrush/wordlists.py` `MALE_FIRST_NAMES`
+- 覆盖语言：German + English + Turkish + Finnish/Estonian
 - 情侣名（含 & / und）→ 不拒，按女博主处理
 
 ## 备注
@@ -101,4 +102,11 @@
 - **偏好筛选 / Anti-targets**: 见 `AGENT.md`「重要约定」章节，非硬性规则，人工选人时参考
 - **运行方式 / 依赖 / 语言检测**: 见项目 `README.md`
 - **版本演进**: 见 `README.md`「版本演进」
-- **品牌/媒体号过滤**: STAGE 1 打分制自动检测（域名后缀、官方号标识、商业词、媒体/综艺模式），命中 → ❌ 品牌官方号，详见 `icrush/judges.py` `is_brand_account()`
+- **品牌/媒体号过滤**: STAGE 1 打分制自动检测（域名后缀、官方号标识、商业词、协会/俱乐部/球队信号、狂欢节信号、用户名前后缀），命中 → ❌ 品牌官方号，详见 `icrush/judges.py` `is_brand_account()`
+- **品牌检测 v0.9.2 新增信号**：
+  - 协会：verein(3), e.V.(3), burschenverein(3), traditionsverein(3), sportverein(3)
+  - 旅游公司：jugendreisen(3), jugendreise(3)
+  - 狂欢节：karneval(3), karnevalsverein(3), karnevalsclub(3), fasching(3), faschingsverein(3), närrisch(2), narren(2)
+  - 体育俱乐部用户名前缀：sv, fc, tsv, sc, vfl, vfb, sg（startswith + ≥2后缀字符 → +3）
+  - 用户名后缀：新增 reisen
+- **商单分类器** (v0.9.2)：词边界阈值 ≤5 字符统一整词匹配，与品类检测对齐，消除 "ringe"→"dringend" 等子串误伤

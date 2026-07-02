@@ -137,6 +137,14 @@ def detect_male_by_name(full_name: str = "", bio: str = "", username: str = "") 
                          if (t.endswith("a") or t.endswith("e")) and 2 <= len(t) <= 4]
 
     if not male_hits:
+        # v0.9.2: compound username detection (e.g. "createdbytaavi")
+        # When username is a single glued-together word, check if any male
+        # name (len >= 5 to avoid false positives like "ali" in "alice")
+        # appears as a substring within the username.
+        _long_male_names = [n for n in MALE_FIRST_NAMES if len(n) >= 5]
+        for mn in _long_male_names:
+            if mn in user_lower:
+                return f"男博主（用户名含: {mn}）"
         return None
 
     # If there's a female name present (e.g. "Anna & Tom"), treat as couple → pass

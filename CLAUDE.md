@@ -5,7 +5,7 @@
 
 ## 项目概况
 
-**ICRUSH v0.9.1** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+**ICRUSH v0.9.2** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
 
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
@@ -87,12 +87,14 @@ docs/
 | 🔴 医疗/健康 | 1 | arzt, medizin, patient, clinic, aerztin |
 | 🔴 宠物/动物 | 1 | pferd, hundetrainer, tierarzt, dog training |
 | 🔴 家居/DIY | 1 | diy, interior, hausbau, einrichten, möbel |
-| 🔴 教育 | 1 | lehrerin, kurs, workshop, academy, schule |
+| 🔴 教育 | 1 | lehrerin, kurs, workshop, academy, gymnasium（不含 schule） |
 | 🟡 母婴 | 2 | mamablog, erziehung, familienblog（不含 mama） |
 | 🔴 美食/烹饪 | 1 | rezept, kochen, foodblog, gerichte, restaurant |
 
 品牌检测：bio 商业信号打分 ≥3 分 → 淘汰（offiziell, hotel, restaurant, kundinnen, bestellung...）
-男性检测：名字 + bio + username + 称呼前缀（Mr, Herr, Daddy, Husband...）
+  含协会/俱乐部信号：verein(3), e.V.(3), burschenverein(3), sportverein(3), jugendreisen(3), karneval(3) 等
+  含体育俱乐部用户名前缀：sv, fc, tsv, sc, vfl, vfb, sg → 直接+3
+男性检测：名字 + bio + username（含复合用户名子串检测）+ 称呼前缀（Mr, Herr, Daddy, Husband...）
 
 ## 重要约定
 
@@ -101,13 +103,17 @@ docs/
 3. 查重：Lambda API + 飞书结果表 + exclusion_list.json
 4. 偏好：白人年轻美女，时尚/穿搭/美妆/生活方式，有口播商单
 
-## 当前状态（2026-07-01）
+## 当前状态（2026-07-02）
 
-- ✅ v0.9.0：Bio 品类负向词 9 类 270+ 关键词，基于 270 条人工反馈训练
+- ✅ v0.9.2：品牌检测覆盖协会/俱乐部/体育队/旅游公司（15+新信号 + 用户名前缀检测）
+- ✅ v0.9.2：教育品类新增 gymnasium/gesamtschule/realschule
+- ✅ v0.9.2：时尚白名单移除 style（太泛），商单分类器词边界 4→5（修复 ringe/dringend）
+- ✅ v0.9.2：男性检测复合用户名子串识别（如 createdbytaavi → taavi）
+- ✅ v0.9.1：Bio 品类负向词 9 类 270+ 关键词，基于 270 条人工反馈训练
 - ✅ STAGE 1 白名单优先（fashion/beauty → 防误杀）
-- ✅ 品牌检测增强 40+ 商业信号
-- ✅ 男性检测三重覆盖（名字 + bio + username + 称呼前缀）
+- ✅ 品牌检测增强 55+ 商业信号（含协会/俱乐部/球队）
+- ✅ 男性检测四重覆盖（名字 + bio + username子串 + 称呼前缀）
 - ✅ 旅游类放行，酒店品牌走品牌检测
 - ✅ 种子去重：批次内 + 跨批次（`seeds_processed.txt`）
-- ⬜ Wednesday 配额重置后刷新缓存（7/1）
+- ⬜ Wednesday 配额重置后刷新缓存
 - ⬜ 飞书 webhook 集成

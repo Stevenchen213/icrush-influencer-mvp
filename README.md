@@ -2,7 +2,7 @@
 
 ICRUSH 国内办公室自动化达人调研流水线 —— 输入种子达人，自动发现类似达人 → Pipeline 硬性筛选 → 输出判定报表。
 
-**当前版本**：v0.9.1 (2026-07-02)
+**当前版本**：v0.9.2 (2026-07-02)
 
 ## 完整工作流
 
@@ -61,7 +61,7 @@ python scripts/run_batch_seeds.py data/seeds.txt --budget 40
 | 🔴 医疗/健康 | 1 命中 | arzt, medizin, patient, clinic, aerztin |
 | 🔴 宠物/动物 | 1 命中 | pferd, hundetrainer, tierarzt, dog training |
 | 🔴 家居/DIY | 1 命中 | diy, interior, hausbau, einrichten, möbel |
-| 🔴 教育 | 1 命中 | lehrerin, kurs, workshop, academy, schule |
+| 🔴 教育 | 1 命中 | lehrerin, kurs, workshop, academy, gymnasium（不含 schule） |
 | 🔴 美食/烹饪 | 1 命中 | rezept, kochen, foodblog, gerichte, restaurant |
 | 🟡 母婴 | 2 命中 | mamablog, erziehung, familienblog（不含 mama） |
 | ✅ 旅游 | 放行 | 旅行博主不拦，酒店走品牌检测 |
@@ -216,6 +216,12 @@ httpx>=0.27, langdetect>=1.0, playwright>=1.60, python-dotenv>=1.0
 - **v0.7.1** (2026-06-24)：**重大更新**
   - 发现 IG 类似账户新方法（三步弹窗法），每种子 ~80 达人，免费
   - 删除所有旧发现方式（hashtag/snowball/suggested/Wednesday discovery）
+- **v0.9.2** (2026-07-02)：**品牌检测 + 品类补漏 + 分类器修复**
+  - 品牌检测：verein 权重 2→3，新增协会/俱乐部信号（e.V./burschenverein/jugendreisen/karneval 等 15+），体育俱乐部用户名前缀检测（sv/fc/tsv/sc 等）
+  - 教育品类：新增 gymnasium/gesamtschule/realschule（schule 保持排除，太泛）
+  - 时尚白名单：移除 style（太泛，与 creator/lifestyle 同理）
+  - 男性检测：复合用户名子串检测（如 "taavi" 在 "createdbytaavi" 中），新增男名 taavi
+  - 商单分类器：词边界阈值 4→5，修复 "ringe" 误匹配 "dringend"
 - **v0.9.1** (2026-07-02)：**品类检测全面加固**
   - 白名单去泛词（移除 creator/influencer/blogger 等），改整词匹配
   - 品类关键词≤5字符统一整词匹配，消除子串误伤

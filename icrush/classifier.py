@@ -89,16 +89,16 @@ def classify_commercial(
         score = 0
         for brand in data["brands"]:
             b = brand.lower()
-            # Short brand names (≤4 chars) use word-boundary matching to prevent
+            # Short brand names (≤5 chars) use word-boundary matching to prevent
             # substring false positives like "mac" in "machen" or "hm" in "ihm".
-            if len(b) <= 4:
+            if len(b) <= 5:
                 if b in _tokens:
                     score += 3
             elif b in combined:
                 score += 3
         for kw in data["keywords"]:
             k = kw.lower()
-            if len(k) <= 4:
+            if len(k) <= 5:
                 if k in _tokens:
                     score += 1
             elif k in combined:

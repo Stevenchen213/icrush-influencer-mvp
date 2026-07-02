@@ -50,13 +50,21 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("abonniere", 1), ("jetzt anmelden", 2), ("tickets", 2),
     ("vorverkauf", 2), ("veranstaltung", 1),
     # Institutional
-    ("institut", 2), ("verein", 2), ("stiftung", 2),
+    ("institut", 2), ("verein", 3), ("stiftung", 2),
     ("museum", 2), ("stadt ", 1), ("tourismus", 2),
+    # v0.9.2: club / association signals
+    ("e.v.", 3), ("e. v.", 3), ("e.V.", 3),
+    ("burschenverein", 3), ("traditionsverein", 3), ("sportverein", 3),
+    ("jugendreisen", 3), ("jugendreise", 3),
     # Venues / hospitality (clear business signals)
     ("kinderhotel", 2), ("familienhotel", 2),
     ("restaurant", 2), ("hotel", 2), ("resort", 2),
     ("hostel", 2), ("beachclub", 2), ("hideaway", 2), ("hideaways", 2),
     ("eventlocation", 2), ("event location", 2),
+    # v0.9.2: carnival / performance clubs
+    ("karneval", 3), ("karnevalsverein", 3), ("karnevalsclub", 3),
+    ("fasching", 3), ("faschingsverein", 3),
+    ("närrisch", 2), ("narren", 2),
     # Brand / shop identities
     ("boutique", 2), ("brand", 2), ("label", 2), ("verlag", 2),
     ("friseur", 1), ("friseurin", 1), ("nagelstudio", 2),
@@ -100,10 +108,19 @@ def is_brand_account(profile: dict) -> bool:
         "shop", "store", "hotel", "restaurant", "festival",
         "agency", "studio", "clinic", "center", "company",
         "magazin", "verlag", "apotheke", "praxis",
-        "label", "brand",
+        "label", "brand", "reisen",
     ]
     for sfx in _brand_username_suffixes:
         if username.endswith(sfx) and not username.endswith("_" + sfx):
+            score += 3
+
+    # Username prefix check (e.g. sv_xxx for Sportverein)
+    _brand_username_prefixes = [
+        "sv", "sv_", "fc", "tsv", "sc", "vfl", "vfb", "sg",
+    ]
+    for pfx in _brand_username_prefixes:
+        if username.startswith(pfx) and (len(username) > len(pfx) + 2):
+            # must have enough chars after prefix to be a real club name
             score += 3
 
     # Username-only signals
@@ -212,7 +229,7 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     FASHION_SAFE_WORDS = {
         "fashion", "beauty", "makeup", "make-up", "skincare", "hautpflege",
         "outfit", "outfits", "ootd",
-        "mode", "style", "styling", "lookbook", "streetstyle",
+        "mode", "styling", "lookbook", "streetstyle",
         "nagel", "nails", "nägel", "friseur", "friseurin", "haare", "hair",
         "cosmetic", "kosmetik", "parfüm", "duft", "fragrance",
         "lippenstift", "mascara", "foundation", "nagellack",
