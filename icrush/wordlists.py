@@ -205,9 +205,9 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
     # ── 美食 / 烹饪 / 食谱 / 餐厅 ──
     "美食/烹饪": [
         "rezept", "foodblog", "foodguide", "foodporn",
-        "kochen", "backen", "backblog", "fruehstueck",
+        "kochen", "backen", "backblog", "fruehstueck", "frühstück",
         "restaurant", "cafe", "foodie", "foodspot",
-        "ernaehrung", "ernaehrungsplan", "abnehmen",
+        "ernaehrung", "ernährung", "ernaehrungsplan", "abnehmen",
         "diaet", "kalorien", "naehrstoff",
         "feinschmecker", "gastro", "gastronomie",
         "streetfood", "foodtruck",
@@ -225,6 +225,8 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "brotdosen", "snackideen", "zuckerfrei",
         "beikost", "breifrei", "baby led weaning",
         "foodspots", "foodguide", "restaurantguide",
+        # v0.9.1: catch bare food references
+        "food",
     ],
     # ── 宗教 / 教会 / 灵性 ──
     "宗教/教会": [
@@ -347,6 +349,13 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         # v0.9.1 batch2
         "montessori", "kindertagespflege",
         "kinderschutz", "verfahrensbeistand",
+        # v0.9.1: reading/literature
+        "buch", "bücher", "buecher", "buchhandlung",
+        "kinderbuch", "kinderbücher", "kinderbuecher",
+        "autor", "autorin", "bestseller", "verlag",
+        "buchladen", "bibliothek", "lesen", "vorlesen",
+        "literatur", "schriftsteller", "schriftstellerin",
+        "kurse",
     ],
 }
 

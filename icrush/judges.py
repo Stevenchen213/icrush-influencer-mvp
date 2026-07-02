@@ -20,7 +20,7 @@ from icrush.wordlists import BIO_CATEGORY_BLOCKLIST
 _BRAND_USERNAME_SIGNALS: list[tuple[str, int]] = [
     ("_deutschland", 3), ("_de", 3), ("_at", 3), ("_ch", 3), ("_dach", 3),
     ("_gmbh", 3), ("_shop", 3), ("_store", 3), ("_official", 3),
-    (".de", 3), (".com", 3), (".at", 3), (".info", 3), (".rtl", 3), (".tv", 3),
+    (".de", 3), (".com", 3), (".at", 3), (".info", 3), (".blog", 3), (".rtl", 3), (".tv", 3),
     ("_online", 3), ("_magazin", 3), ("magazine", 3), ("_news", 3),
     ("_label", 3), ("_brand", 3),
     # Removed: jewelry/jewellery/schmuck/bijoux — too aggressive,
@@ -55,7 +55,7 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     # Venues / hospitality (clear business signals)
     ("kinderhotel", 2), ("familienhotel", 2),
     ("restaurant", 2), ("hotel", 2), ("resort", 2),
-    ("hostel", 2), ("beachclub", 2),
+    ("hostel", 2), ("beachclub", 2), ("hideaway", 2), ("hideaways", 2),
     ("eventlocation", 2), ("event location", 2),
     # Brand / shop identities
     ("boutique", 2), ("brand", 2), ("label", 2), ("verlag", 2),
@@ -66,6 +66,11 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("shop", 1), ("store", 1), ("beauty", 1),
     ("edeka", 2), ("rewe", 2), ("lidl", 2), ("aldi", 2),
     ("official account", 2), ("brautmode", 2),
+    ("reiseblog", 3), ("reisebüro", 3), ("reiseportal", 3),
+    ("reisetipps", 2), ("guides", 2),
+    ("unterkunft", 1), ("unterkünfte", 1),
+    ("kinderhotel", 2), ("familienhotel", 2),
+    ("buchhandlung", 2), ("verlag", 2), ("buchladen", 2),
     ("geschäft", 1), ("markt", 1), ("bedarf", 1),
     ("eröffnungszeiten", 1), ("filiale", 1),
     ("instagram.com/", -10),   # never penalize bio links
