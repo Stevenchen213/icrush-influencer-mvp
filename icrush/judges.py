@@ -157,8 +157,40 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     bio: str = (profile.get("bio") or "").lower()
     full_name: str = (profile.get("fullName") or "").lower()
     username: str = (profile.get("name") or "").lower()
+    ig_category: str = (profile.get("category") or "").lower()
     # Scan bio + full_name + username (usernames like "psychologin.marie" are strong signals)
     combined = bio + " " + full_name + " " + username
+
+    # IG business category → direct category block (strong signal, 3 pts).
+    # e.g. "Nonprofit organization" → 宗教, "Restaurant" → 美食, "Doctor" → 医疗
+    _IG_CATEGORY_MAP: dict[str, str] = {
+        "restaurant": "美食/烹饪", "food": "美食/烹饪", "chef": "美食/烹饪",
+        "kitchen": "美食/烹饪", "grocery": "美食/烹饪",
+        "doctor": "医疗/健康", "medical": "医疗/健康", "health": "医疗/健康",
+        "hospital": "医疗/健康", "clinic": "医疗/健康", "dentist": "医疗/健康",
+        "pharmacy": "医疗/健康", "physiotherapist": "医疗/健康",
+        "psychologist": "心理/咨询/治疗", "therapist": "心理/咨询/治疗",
+        "mental health": "心理/咨询/治疗", "counselor": "心理/咨询/治疗",
+        "coach": "心理/咨询/治疗",
+        "musician": "音乐/演出", "band": "音乐/演出", "dj": "音乐/演出",
+        "festival": "音乐/演出", "concert": "音乐/演出",
+        "church": "宗教/教会", "religious": "宗教/教会",
+        "nonprofit": "宗教/教会", "charity": "宗教/教会",
+        "school": "教育/知识付费", "teacher": "教育/知识付费",
+        "education": "教育/知识付费", "tutor": "教育/知识付费",
+        "university": "教育/知识付费", "college": "教育/知识付费",
+        "pet": "宠物/动物", "animal": "宠物/动物",
+        "veterinarian": "宠物/动物", "vet": "宠物/动物",
+        "home": "家居/DIY/清洁", "interior": "家居/DIY/清洁",
+        "cleaning": "家居/DIY/清洁", "gardener": "家居/DIY/清洁",
+        "pregnancy": "母婴/育儿", "parenting": "母婴/育儿",
+        "baby": "母婴/育儿", "child": "母婴/育儿",
+    }
+    _ig_cat_hit: str | None = None
+    for sig, cat in _IG_CATEGORY_MAP.items():
+        if sig in ig_category:
+            _ig_cat_hit = cat
+            break
 
     # Whitelist: fashion/beauty/jewelry/lifestyle keywords take priority.
     # If bio clearly signals fashion/beauty niche, skip category blocking
@@ -227,6 +259,9 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
     for category, keywords in BIO_CATEGORY_BLOCKLIST.items():
         hits = 0
         threshold = 1 if category in AGGRESSIVE_CATEGORIES else 2
+        # IG business category bonus: direct match = 3 pts from IG's own classification
+        if _ig_cat_hit == category:
+            hits += 3
         for kw in keywords:
             matched = False
             if kw in HIGH_SPECIFICITY:
