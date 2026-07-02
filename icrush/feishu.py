@@ -227,10 +227,14 @@ def _build_review_fields(
     fields = _build_fields(r, unique_username, date_str, batch_id)
 
     # Review-specific columns — empty, humans fill these in Feishu UI
-    if "总结反馈" not in fields:
-        fields["总结反馈"] = ""
+    if "其他反馈" not in fields:
+        fields["其他反馈"] = ""
     if "二次判定" not in fields:
         fields["二次判定"] = ""
+    if "淘汰反馈" not in fields:
+        fields["淘汰反馈"] = ""
+    if "人员分配" not in fields:
+        fields["人员分配"] = ""
 
     return fields
 
@@ -453,13 +457,26 @@ REVIEW_TABLE_SCHEMA = [
     {"field_name": "批次ID", "type": 1},
     {"field_name": "日期", "type": 5},                    # 5 = Date
     # ── Review columns (human-filled) ──
-    {"field_name": "总结反馈", "type": 1},                 # 1 = Text, empty for reviewers
     {"field_name": "二次判定", "type": 3,                  # 3 = Single Select
      "property": {"options": [
          {"name": "通过", "color": 0},
          {"name": "淘汰", "color": 1},
          {"name": "待定", "color": 2},
      ]}},
+    {"field_name": "淘汰反馈", "type": 3,                  # 3 = Single Select
+     "property": {"options": [
+         {"name": "未成年", "color": 0},
+         {"name": "男性", "color": 1},
+         {"name": "品类不符", "color": 2},
+         {"name": "品牌官号", "color": 3},
+         {"name": "地区不符", "color": 4},
+         {"name": "粉丝过少", "color": 5},
+         {"name": "粉丝过多", "color": 6},
+         {"name": "内容质量差", "color": 7},
+         {"name": "其他", "color": 8},
+     ]}},
+    {"field_name": "其他反馈", "type": 1},                 # 1 = Text
+    {"field_name": "人员分配", "type": 1},                 # 1 = Text
 ]
 
 
