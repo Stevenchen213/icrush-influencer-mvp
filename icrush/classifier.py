@@ -194,6 +194,8 @@ def format_commercial_stats(stats: dict | None) -> str:
     """
     if stats is None:
         return "-"
+    if isinstance(stats, str):
+        return stats  # already a display string (e.g. from re-sync)
     if stats["total"] == 0:
         return "无"
 
