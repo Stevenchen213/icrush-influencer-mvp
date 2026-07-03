@@ -220,36 +220,54 @@ def main():
         print("   （使用 --force 可强制重跑）")
         sys.exit(0)
 
+    BATCH_SIZE = 5
+    batches = [seeds[i:i + BATCH_SIZE] for i in range(0, len(seeds), BATCH_SIZE)]
+
     print("=" * 55)
-    print(f"ICRUSH Full Workflow — {len(seeds)} seeds, max {MAX_RETRIES} retries/step")
-    print(f"Seeds: {', '.join(seeds)}")
+    print(f"ICRUSH Full Workflow — {len(seeds)} seeds → {len(batches)} batches (≤{BATCH_SIZE}/batch)")
+    for bi, batch in enumerate(batches):
+        print(f"  Batch {bi+1}: {', '.join(batch)}")
     print("=" * 55)
 
     t0 = time.time()
+    total_ok = 0
+    total_fail = 0
 
-    # Stage 1: Ensure CDP
-    if not step_ensure_cdp():
-        sys.exit(1)
+    for bi, batch in enumerate(batches):
+        print(f"\n{'#' * 55}")
+        print(f"# BATCH {bi+1}/{len(batches)}: {', '.join(batch)}")
+        print(f"{'#' * 55}")
 
-    # Stage 2: Extract similar accounts
-    if not step_extract(seeds):
-        sys.exit(1)
+        # Stage 1: Ensure CDP
+        if not step_ensure_cdp():
+            print("❌ CDP 不可用，终止后续批次")
+            sys.exit(1)
 
-    # Stage 3: Pipeline
-    pipeline_ok = step_pipeline()
+        # Stage 2: Extract similar accounts (this batch only)
+        if not step_extract(batch):
+            print(f"❌ Batch {bi+1} 提取失败，继续下一批")
+            total_fail += 1
+            continue
 
-    # 保存已处理的种子（即使 pipeline 部分失败也保存——提取已完成）
-    save_processed_seeds(seeds)
-    print(f"📝 种子已记录到 {SEEDS_PROCESSED.name}（共 {len(load_processed_seeds())} 个历史种子）")
+        # Stage 3: Pipeline
+        pipeline_ok = step_pipeline()
+        if pipeline_ok:
+            total_ok += 1
+            print(f"\n✅ Batch {bi+1} pipeline 完成")
+        else:
+            total_fail += 1
+            print(f"\n⚠️  Batch {bi+1} pipeline 异常")
+
+        # 保存已处理的种子
+        save_processed_seeds(batch)
 
     elapsed = time.time() - t0
     print(f"\n{'=' * 55}")
-    print(f"Workflow complete in {elapsed:.0f}s.")
-    if COMBINED_INPUT.exists():
-        print(f"Next: check results/ for the latest report.")
+    print(f"Workflow complete in {elapsed:.0f}s — {total_ok} ok, {total_fail} fail")
+    print(f"📝 共处理 {len(seeds)} 个种子（{len(load_processed_seeds())} 个历史种子）")
     print(f"{'=' * 55}")
 
-    if not pipeline_ok:
+    if total_fail > 0:
         sys.exit(1)
 
 
