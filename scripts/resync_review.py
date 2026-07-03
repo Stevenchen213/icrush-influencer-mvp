@@ -18,12 +18,16 @@ def parse_report(fp):
         if len(cells)<11: continue
         if '已入库' in cells[10]: continue
         if '❌ 否' in cells[10]: continue
+        # cells[9] = 近3月商单 (e.g. "服饰×2 | 共4条" or "-" or "无")
+        commercial_raw = cells[9] if len(cells) > 9 else "-"
+        if commercial_raw in ("-", ""):
+            commercial_raw = "无"
         records.append({
             'name':cells[2],'platform':cells[1],'fans':_safe_int(cells[3]),'posts':_safe_int(cells[4]),
             'regionAccurate':cells[5],'avgViews':_safe_int(cells[6]),
             'genderFemale':_safe_int(cells[7].replace('%','')) if cells[7]!='无信息' else None,
             '_captionDePct':_safe_int(cells[8]) if cells[8]!='-' else None,
-            'commercialStats':None,'verdict':cells[10],'reason':cells[11],
+            'commercialStats':commercial_raw,'verdict':cells[10],'reason':cells[11],
         })
     return records
 

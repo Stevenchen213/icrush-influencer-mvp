@@ -232,20 +232,42 @@ def _build_review_fields(
 ) -> dict:
     """Map a single pipeline result to review table fields.
 
-    Reuses _build_fields for the standard columns and adds two
-    empty review columns (总结反馈, 二次判定) for humans to fill
-    in the Feishu UI.
+    Field ORDER must match the review table's column order exactly —
+    Feishu batch_create maps by position, not field name.
     """
-    fields = _build_fields(r, unique_username, date_str, batch_id)
+    from icrush.classifier import format_commercial_stats
 
-    # 女粉占比：主结果表是 Number，二次判断表是 Text → 转回字符串
-    gf = fields.get("女粉占比")
-    if gf is not None:
-        fields["女粉占比"] = f"{gf}%"
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    date_ms = calendar.timegm(dt.timetuple()) * 1000
 
-    # Only pipeline-generated fields — human columns (二次判定/淘汰反馈/其他反馈/人员分配)
-    # already exist in the table and will be left blank for new records.
-    return fields
+    gf = r.get("genderFemale")
+    gf_str = f"{gf}%" if gf is not None else None
+
+    platform = r.get("platform", "")
+    name = r.get("name", "")
+    link = {"link": f"https://www.instagram.com/{name}/"} if platform == "IG" else {"link": f"https://www.tiktok.com/@{name}"}
+
+    # Review table column order (must match Feishu exactly):
+    # 多行文本(skip) | 用户名 | 平台 | 达人链接 | 粉丝数量 | 帖数 |
+    # 近三月平均浏览量 | 女粉占比 | 地区准确性 | Caption德语占比 |
+    # 近3月商单 | 判定结果 | 原因 | 批次ID | 日期
+    fields = {
+        "用户名": name,
+        "平台": platform,
+        "达人链接": link,
+        "粉丝数量": _safe_int(r.get("fans")),
+        "帖数": _safe_int(r.get("posts")),
+        "近三月平均浏览量": _safe_int(r.get("avgViews")),
+        "女粉占比": gf_str,
+        "地区准确性": r.get("regionAccurate", ""),
+        "Caption德语占比": _safe_int(r.get("_captionDePct")),
+        "近3月商单": format_commercial_stats(r.get("commercialStats")),
+        "判定结果": r.get("verdict", ""),
+        "原因": r.get("reason", ""),
+        "批次ID": batch_id,
+        "日期": date_ms,
+    }
+    return {k: v for k, v in fields.items() if v is not None}
 
 
 async def _batch_create(
