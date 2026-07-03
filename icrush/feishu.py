@@ -179,6 +179,18 @@ async def fetch_all_usernames(
         return set()
 
 
+def _safe_int(val):
+    """Coerce to int, returning None for non-numeric values."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        val = val.replace(",", "").replace(".", "").strip()
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
 def _build_fields(
     r: dict,
     unique_username: str,
@@ -195,12 +207,12 @@ def _build_fields(
     fields = {
         "用户名": r.get("name", ""),  # bare username, platform is a separate field
         "平台": r.get("platform", ""),
-        "粉丝数量": r.get("fans"),
-        "帖数": r.get("posts"),
+        "粉丝数量": _safe_int(r.get("fans")),
+        "帖数": _safe_int(r.get("posts")),
         "地区准确性": r.get("regionAccurate", ""),
-        "近三月平均浏览量": r.get("avgViews"),
-        "女粉占比": f"{r.get('genderFemale')}%" if r.get("genderFemale") is not None else None,
-        "Caption德语占比": r.get("_captionDePct"),
+        "近三月平均浏览量": _safe_int(r.get("avgViews")),
+        "女粉占比": r.get("genderFemale"),
+        "Caption德语占比": _safe_int(r.get("_captionDePct")),
         "达人链接": {"link": f"https://www.instagram.com/{r.get('name', '')}/"} if r.get("platform") == "IG" else {"link": f"https://www.tiktok.com/@{r.get('name', '')}"},
         "近3月商单": format_commercial_stats(r.get("commercialStats")),
         "判定结果": r.get("verdict", ""),
