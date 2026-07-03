@@ -14,9 +14,13 @@ import os
 from pathlib import Path
 from urllib.request import urlopen, Request
 
-# Fix Windows GBK encoding for emoji output
+# Fix Windows GBK encoding for emoji output + disable buffering for background runs
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
 from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -185,6 +189,18 @@ def main():
         elif args[i] == "--force":
             force_flag = True
             i += 1
+        elif args[i] == "--file" and i + 1 < len(args):
+            from pathlib import Path
+            fp = Path(args[i + 1])
+            if fp.exists():
+                seeds.extend(
+                    l.strip() for l in fp.read_text("utf-8").splitlines()
+                    if l.strip() and not l.strip().startswith("#")
+                )
+            else:
+                print(f"File not found: {fp}")
+                sys.exit(1)
+            i += 2
         elif not args[i].startswith("--"):
             seeds.append(args[i])
             i += 1

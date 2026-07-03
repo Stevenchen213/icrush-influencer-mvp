@@ -206,4 +206,6 @@ def format_commercial_stats(stats: dict | None) -> str:
     if stats.get("其他", 0) > 0:
         parts.append(f"其他×{stats['其他']}")
 
-    return f"{', '.join(parts)} | 共{stats['total']}条"
+    if parts:
+        return f"{', '.join(parts)} | 共{stats['total']}条"
+    return f"共{stats['total']}条"

@@ -238,6 +238,11 @@ def _build_review_fields(
     """
     fields = _build_fields(r, unique_username, date_str, batch_id)
 
+    # 女粉占比：主结果表是 Number，二次判断表是 Text → 转回字符串
+    gf = fields.get("女粉占比")
+    if gf is not None:
+        fields["女粉占比"] = f"{gf}%"
+
     # Only pipeline-generated fields — human columns (二次判定/淘汰反馈/其他反馈/人员分配)
     # already exist in the table and will be left blank for new records.
     return fields
