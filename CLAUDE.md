@@ -5,7 +5,7 @@
 
 ## 项目概况
 
-**ICRUSH v0.9.2** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
+**ICRUSH v0.9.3** — 国内办公室自动化达人筛选管线。输入 IG/TT 链接，自动判定通过/淘汰/置换/复查，输出 Markdown 报表。
 
 GitHub: https://github.com/Stevenchen213/icrush-influencer-mvp.git
 
@@ -91,10 +91,9 @@ docs/
 | 🟡 母婴 | 2 | mamablog, erziehung, familienblog（不含 mama） |
 | 🔴 美食/烹饪 | 1 | rezept, kochen, foodblog, gerichte, restaurant |
 
-品牌检测：bio 商业信号打分 ≥3 分 → 淘汰（offiziell, hotel, restaurant, kundinnen, bestellung...）
-  含协会/俱乐部信号：verein(3), e.V.(3), burschenverein(3), sportverein(3), jugendreisen(3), karneval(3) 等
-  含体育俱乐部用户名前缀：sv, fc, tsv, sc, vfl, vfb, sg → 直接+3
-男性检测：名字 + bio + username（含复合用户名子串检测）+ 称呼前缀（Mr, Herr, Daddy, Husband...）
+品牌检测：bio/全名打分 ≥3 → ❌ 品牌官方号（130 信号，白名单词不计入）
+  含协会/俱乐部/旅游/狂欢节信号 + 用户名前后缀检测（sv/fc/tsv/sc + fotografie/studios/offiziell/crew 等）
+男性检测：名字 + bio + username（含复合用户名子串）+ 称呼前缀（Mr, Herr...），情侣名 &/und 仅紧邻词 ≤12 字符
 
 ## 重要约定
 
@@ -103,12 +102,16 @@ docs/
 3. 查重：Lambda API + 飞书结果表 + exclusion_list.json
 4. 偏好：白人年轻美女，时尚/穿搭/美妆/生活方式，有口播商单
 
-## 当前状态（2026-07-02）
+## 当前状态（2026-07-03）
 
+- ✅ v0.9.3：40 条人工反馈驱动，品牌信号大清理（161→130），无逻辑冲突
+- ✅ v0.9.3：土耳其语/非德语区检测（土耳其字符+langdetect+🇹🇷，先于白名单），假名不享白名单
+- ✅ v0.9.3：品类词库扩充 28 词（医疗/灵性/政治/家居/母婴），男名 +8
+- ✅ v0.9.3：情侣名检测修复（紧邻词 ≤12 字符）
 - ✅ v0.9.2：品牌检测覆盖协会/俱乐部/体育队/旅游公司（15+新信号 + 用户名前缀检测）
 - ✅ v0.9.2：教育品类新增 gymnasium/gesamtschule/realschule
-- ✅ v0.9.2：时尚白名单移除 style（太泛），商单分类器词边界 4→5（修复 ringe/dringend）
-- ✅ v0.9.2：男性检测复合用户名子串识别（如 createdbytaavi → taavi）
+- ✅ v0.9.2：时尚白名单移除 style，商单分类器词边界 4→5
+- ✅ v0.9.2：男性检测复合用户名子串识别
 - ✅ v0.9.1：Bio 品类负向词 9 类 270+ 关键词，基于 270 条人工反馈训练
 - ✅ STAGE 1 白名单优先（fashion/beauty → 防误杀）
 - ✅ 品牌检测增强 55+ 商业信号（含协会/俱乐部/球队）

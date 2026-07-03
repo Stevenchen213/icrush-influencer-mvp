@@ -540,7 +540,7 @@ async def create_results_table(
 
 
 async def create_review_table(
-    name: str = "达人二次判断",
+    name: str = "达人二次判断-AI",
     base_id: str | None = None,
     token: str | None = None,
 ) -> str | None:

@@ -29,7 +29,6 @@ _BRAND_USERNAME_SIGNALS: list[tuple[str, int]] = [
 
 # Bio-only signals (lower weight — need combination to cross threshold)
 _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
-    ("www.", 2),
     ("online-shop", 2), ("onlineshop", 2), ("online shop", 2),
     ("offiziell", 2), ("offizielle", 2), ("official", 2),
     ("gmbh", 2), ("impressum", 2), ("datenschutz", 2),
@@ -44,14 +43,13 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("standort", 2), ("standorte", 2), ("buchung", 1),
     ("termin", 1), ("termin vereinbaren", 2),
     ("geöffnet", 2), ("öffnungszeiten", 2), ("mo-fr", 2),
-    ("☎", 2), ("📞", 1),
     # Corporate / institutional language
-    ("unser team", 2), ("wir sind", 1), ("besuche uns", 2),
-    ("abonniere", 1), ("jetzt anmelden", 2), ("tickets", 2),
+    ("unser team", 2), ("besuche uns", 2),
+    ("jetzt anmelden", 2), ("tickets", 2),
     ("vorverkauf", 2), ("veranstaltung", 1),
     # Institutional
     ("institut", 2), ("verein", 3), ("stiftung", 2),
-    ("museum", 2), ("stadt ", 1), ("tourismus", 2),
+    ("museum", 2), ("tourismus", 2),
     # v0.9.2: club / association signals
     ("e.v.", 3), ("e. v.", 3), ("e.V.", 3),
     ("burschenverein", 3), ("traditionsverein", 3), ("sportverein", 3),
@@ -67,40 +65,33 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("närrisch", 2), ("narren", 2),
     # Brand / shop identities
     ("boutique", 2), ("brand", 2), ("label", 2), ("verlag", 2),
-    ("friseur", 1), ("friseurin", 1), ("nagelstudio", 2),
-    ("kosmetikstudio", 2), ("beauty studio", 2),
-    ("permanent makeup", 2), ("microblading", 2),
+    ("microblading", 2),
     # Weak signals (1 pt — must combine with others)
-    ("shop", 1), ("store", 1), ("beauty", 1),
+    ("shop", 2), ("store", 1),
     ("edeka", 2), ("rewe", 2), ("lidl", 2), ("aldi", 2),
     ("official account", 2), ("founder", 2), ("ceo ", 2),
     ("unternehmer", 2), ("unternehmerin", 2),
     ("brautmode", 2),
     ("reiseblog", 3), ("reisebüro", 3), ("reiseportal", 3),
-    ("reisetipps", 2), ("guides", 2),
+    ("reisetipps", 2),
     ("unterkunft", 1), ("unterkünfte", 1),
-    ("kinderhotel", 2), ("familienhotel", 2),
-    ("buchhandlung", 2), ("verlag", 2), ("buchladen", 2),
-    ("geschäft", 1), ("markt", 1), ("bedarf", 1),
-    ("eröffnungszeiten", 1), ("filiale", 1),
+    ("buchhandlung", 2), ("buchladen", 2),
+    ("geschäft", 1), ("bedarf", 1),
     # v0.9.3: from 40-case feedback review
     ("schulung", 2), ("schulungen", 2),
     ("redakteur", 2), ("redakteure", 2), ("nachrichten", 2),
     ("mitgliedschaft", 2), ("terminbuchung", 3),
     ("produktionsfirma", 3), ("haarextensions", 3),
-    ("strandbar", 3), ("beachbar", 3), ("beach bar", 3),
-    ("fashion shop", 3), ("hair expert", 2), ("hair experts", 2),
-    ("app store", 2), ("play store", 2), ("download", 1),
+    ("strandbar", 3), ("beachbar", 3),
+    ("app store", 2), ("play store", 2),
     ("jetzt kaufen", 2), ("worldwide shipping", 2),
-    ("dessert shop", 3), ("beauty salon", 2),
-    ("television", 2), ("news", 2),
+    ("television", 2),
     ("photographer", 1), ("fotografin", 1), ("fotograf", 1),
     ("dm for collab", 2), ("dm for collabs", 2),
-    ("salon", 2), ("studio", 1),
-    ("produktion", 2), ("produktionsfirma", 3),
+    ("salon", 2), ("studio", 2),
     ("braut", 2), ("bride", 2),
     # v0.9.3: platform / media signals
-    ("by @", 1), ("listingfees", 2), ("portal", 1), ("crew", 2),
+    ("listingfees", 2), ("crew", 2),
     ("instagram.com/", -10),   # never penalize bio links
 ]
 
@@ -153,20 +144,6 @@ def is_brand_account(profile: dict) -> bool:
     # Bio + full_name only signals (NOT username)
     for pat, weight in _BRAND_BIO_SIGNALS:
         if pat in bio or pat in full_name:
-            score += weight
-
-    # v0.9.3: Compound brand signals (checked after individual signals)
-    # "fashion shop" pattern: if "fashion" and "shop" both in bio → strong signal
-    _compound_signals = [
-        (["fashion", "shop"], 3),
-        (["make", "up", "termine"], 2),
-        (["jetzt", "kaufen"], 2),
-        (["worldwide", "shipping"], 2),
-        (["app", "store"], 2),
-        (["play", "store"], 2),
-    ]
-    for words, weight in _compound_signals:
-        if all(w in bio or w in full_name for w in words):
             score += weight
 
     # Known chain brands in full_name → strong signal (3 pts each)
@@ -250,6 +227,26 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
             _ig_cat_hit = cat
             break
 
+    # v0.9.3: Turkish / non-DACH content detection (runs BEFORE whitelist).
+    # Turkish fashion/beauty accounts often use English keywords ("fashion, beauty")
+    # to bypass the whitelist. Detect Turkish signals first.
+    _turkish_chars = "ğşı"  # ğ, ş, ı (dotless i — Turkish-specific)
+    _turkish_signals = ["türkei", "türk", "\U0001f1f9\U0001f1f7"]  # Türkei, Türk, 🇹🇷
+    _is_turkish = any(c in bio or c in full_name for c in _turkish_chars)
+    _is_turkish = _is_turkish or any(s in combined for s in _turkish_signals)
+    if not _is_turkish:
+        # Also try langdetect on bio (expensive but accurate)
+        try:
+            from langdetect import detect as _detect_lang
+            _bio_clean = " ".join(bio.replace("@", " ").replace("#", " ").split())
+            if len(_bio_clean) >= 15:
+                _lang = _detect_lang(_bio_clean)
+                _is_turkish = (_lang == "tr")
+        except Exception:
+            pass
+    if _is_turkish:
+        return (True, "品类不符：土耳其语/非德语区")
+
     # Whitelist: fashion/beauty/jewelry/lifestyle keywords take priority.
     # If bio clearly signals fashion/beauty niche, skip category blocking
     # even if it also contains psych/parenting/food keywords.
@@ -268,11 +265,16 @@ def is_wrong_category(profile: dict) -> tuple[bool, str]:
         "lippenstift", "mascara", "foundation", "nagellack",
         "augenbrauen", "brows", "lashes", "haircare",
     }
+    # v0.9.3: Don't apply whitelist to accounts with fake/initial-only names.
+    # Turkish/international accounts often use initials (e.g. "SK") to hide
+    # their identity while using English "fashion, beauty" to bypass filters.
+    _is_real_name = len(full_name.replace(" ", "").replace(".", "").replace("_", "")) > 2
+
     # Word-boundary match: split combined text into tokens and check set
     # intersection. This prevents substrings like "mode" in "modern" or
     # "ring" in "bring" from falsely triggering the fashion whitelist.
     _fashion_tokens = set(combined.replace(",", " ").replace(".", " ").replace("|", " ").replace("/", " ").split())
-    if _fashion_tokens & FASHION_SAFE_WORDS:
+    if _is_real_name and (_fashion_tokens & FASHION_SAFE_WORDS):
         return (False, "")
 
     # High-specificity keywords: single match is enough
