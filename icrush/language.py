@@ -147,8 +147,22 @@ def detect_male_by_name(full_name: str = "", bio: str = "", username: str = "") 
                 return f"男博主（用户名含: {mn}）"
         return None
 
-    # If there's a female name present (e.g. "Anna & Tom"), treat as couple → pass
-    if "&" in full_name or "und" in full_name.lower():
+    # If there's a female name present (e.g. "Anna & Tom"), treat as couple → pass.
+    # v0.9.3: only skip if BOTH adjacent tokens around &/und are short (≤12 chars).
+    # Prevents "Flo | Reisetipps & Ausflugsziele" being treated as couple.
+    _is_couple = False
+    for _sep in [" & ", " und "]:
+        if _sep in name_lower:
+            _parts = name_lower.rsplit(_sep, 1)
+            if len(_parts) == 2:
+                _left_tokens = _parts[0].strip().split()
+                _right_tokens = _parts[1].strip().split()
+                _left_word = _left_tokens[-1] if _left_tokens else ""
+                _right_word = _right_tokens[0] if _right_tokens else ""
+                if len(_left_word) <= 12 and len(_right_word) <= 12:
+                    _is_couple = True
+            break
+    if _is_couple:
         return None
 
     # Only one token and it's male → likely male

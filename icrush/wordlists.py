@@ -169,6 +169,10 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "beziehungscoach", "bindungsangst",
         "energetiker", "energetikerin",
         "humanenergetiker", "humanenergetikerin",
+        # v0.9.3: from 40-case feedback review
+        "kartenlegerin", "kartenleger", "dualseelenexpertin",
+        "dualseele", "wahrsager", "wahrsagerin",
+        "hellseher", "hellseherin", "medium",
     ],
     # ── 母婴 / 育儿 / 家庭 ──
     "母婴/育儿": [
@@ -201,6 +205,8 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "elternzeit", "elterngeld", "pflegefamilie",
         "mamagedanken", "mamagefühle", "mama-modus",
         "mamaleben", "familienhotel",
+        # v0.9.3: from 40-case feedback review
+        "mamaalltag",
     ],
     # ── 美食 / 烹饪 / 食谱 / 餐厅 ──
     "美食/烹饪": [
@@ -239,6 +245,10 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "church", "bible", "ministry", "faith",
         "god ", "christian", "catholic",
         "worship", "prayer", "scripture",
+        # v0.9.3: political / ideological (same category — non-commerce advocacy)
+        "bundestag", "faschismus", "rassismus", "hetze",
+        "gegen nazis", "antifa", "die linke",
+        "abgeordnet", "fraktion", "partei",
     ],
     # ── 音乐 / DJ / 乐队 / 演出 / 音乐节 ──
     "音乐/演出": [
@@ -274,6 +284,10 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "stoffwechsel", "hormonbalance",
         "autoimmunerkrankung", "chronisch krank",
         "diabetes", "migräne", "schilddrüsenerkrankung",
+        # v0.9.3: from 40-case feedback review
+        "heilerziehungspflegerin", "heilerziehungspfleger",
+        "icu nurse", "intensivpflege", "krankenschwester",
+        "krankenpfleger", "pflegekraft", "altenpflege",
     ],
     # ── 宠物 / 动物 ──
     "宠物/动物": [
@@ -326,6 +340,8 @@ BIO_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
         "kinderzimmer", "badezimmer", "umbauen",
         "resthof", "altbau", "sanierung",
         "home living", "deko inspiration",
+        # v0.9.3: from 40-case feedback review
+        "retreat", "retreatlocation",
     ],
     # ── 教育 / 教师 / 知识付费 ──
     "教育/知识付费": [
@@ -389,6 +405,8 @@ MALE_FIRST_NAMES: frozenset[str] = frozenset(
     "selim,serdar,serkan,suleyman,tolga,ugur,umut,volkan,yasin,"
     "yigit,yunus,yusuf,"
     # v0.9.2: from false-negative review
-    "taavi"
+    "taavi,"
+    # v0.9.3: from 40-case feedback review
+    "tristan,flo,steffen,maik,hueseyin,dave,jacob,ardi"
     .split(",")
 )

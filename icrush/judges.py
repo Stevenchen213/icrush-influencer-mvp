@@ -83,6 +83,24 @@ _BRAND_BIO_SIGNALS: list[tuple[str, int]] = [
     ("buchhandlung", 2), ("verlag", 2), ("buchladen", 2),
     ("geschäft", 1), ("markt", 1), ("bedarf", 1),
     ("eröffnungszeiten", 1), ("filiale", 1),
+    # v0.9.3: from 40-case feedback review
+    ("schulung", 2), ("schulungen", 2),
+    ("redakteur", 2), ("redakteure", 2), ("nachrichten", 2),
+    ("mitgliedschaft", 2), ("terminbuchung", 3),
+    ("produktionsfirma", 3), ("haarextensions", 3),
+    ("strandbar", 3), ("beachbar", 3), ("beach bar", 3),
+    ("fashion shop", 3), ("hair expert", 2), ("hair experts", 2),
+    ("app store", 2), ("play store", 2), ("download", 1),
+    ("jetzt kaufen", 2), ("worldwide shipping", 2),
+    ("dessert shop", 3), ("beauty salon", 2),
+    ("television", 2), ("news", 2),
+    ("photographer", 1), ("fotografin", 1), ("fotograf", 1),
+    ("dm for collab", 2), ("dm for collabs", 2),
+    ("salon", 2), ("studio", 1),
+    ("produktion", 2), ("produktionsfirma", 3),
+    ("braut", 2), ("bride", 2),
+    # v0.9.3: platform / media signals
+    ("by @", 1), ("listingfees", 2), ("portal", 1), ("crew", 2),
     ("instagram.com/", -10),   # never penalize bio links
 ]
 
@@ -108,7 +126,8 @@ def is_brand_account(profile: dict) -> bool:
         "shop", "store", "hotel", "restaurant", "festival",
         "agency", "studio", "clinic", "center", "company",
         "magazin", "verlag", "apotheke", "praxis",
-        "label", "brand", "reisen",
+        "label", "brand", "reisen", "fotografie",
+        "productions", "studios", "offiziell", "crew",
     ]
     for sfx in _brand_username_suffixes:
         if username.endswith(sfx) and not username.endswith("_" + sfx):
@@ -134,6 +153,20 @@ def is_brand_account(profile: dict) -> bool:
     # Bio + full_name only signals (NOT username)
     for pat, weight in _BRAND_BIO_SIGNALS:
         if pat in bio or pat in full_name:
+            score += weight
+
+    # v0.9.3: Compound brand signals (checked after individual signals)
+    # "fashion shop" pattern: if "fashion" and "shop" both in bio → strong signal
+    _compound_signals = [
+        (["fashion", "shop"], 3),
+        (["make", "up", "termine"], 2),
+        (["jetzt", "kaufen"], 2),
+        (["worldwide", "shipping"], 2),
+        (["app", "store"], 2),
+        (["play", "store"], 2),
+    ]
+    for words, weight in _compound_signals:
+        if all(w in bio or w in full_name for w in words):
             score += weight
 
     # Known chain brands in full_name → strong signal (3 pts each)
