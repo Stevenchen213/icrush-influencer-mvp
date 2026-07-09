@@ -265,7 +265,6 @@ def _build_review_fields(
         "判定结果": r.get("verdict", ""),
         "原因": r.get("reason", ""),
         "批次ID": batch_id,
-        "日期": date_ms,
     }
     return {k: v for k, v in fields.items() if v is not None}
 

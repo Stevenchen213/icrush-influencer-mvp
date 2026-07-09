@@ -384,22 +384,89 @@ class Pipeline:
                 }, kind="tt-profile")
             ))
 
+        tt_profiles: dict = {}
+        ig_profiles: dict = {}
+
+        # IG profiles via RapidAPI first, Apify fallback
+        rapidapi_missed: list[str] = []
         if uncached_ig:
-            print(f"  → IG profile-scraper ×{len(uncached_ig)}")
+            print(f"  → RapidAPI IG profiles ×{len(uncached_ig)}")
+            from icrush.rapidapi import fetch_ig_profiles
+
+            rapidapi_results = await fetch_ig_profiles(uncached_ig)
+            for name, p in rapidapi_results.items():
+                ig_profiles[name] = {
+                    "name": p["username"],
+                    "fullName": p.get("fullName", ""),
+                    "fans": p.get("followersCount", 0),
+                    "posts": p.get("postsCount", 0),
+                    "bio": p.get("biography", ""),
+                    "category": p.get("businessCategoryName"),
+                    "private": p.get("private", False),
+                    "region": p.get("region", detect_region(p.get("biography", ""))),
+                    "latestPosts": [],
+                }
+            rapidapi_missed = [u for u in uncached_ig if u not in ig_profiles]
+            if rapidapi_missed:
+                print(f"  → Apify fallback IG profiles ×{len(rapidapi_missed)}")
+            else:
+                print(f"  ✓ RapidAPI covered all {len(uncached_ig)} profiles")
+
+        # Apify fallback for IG profiles RapidAPI missed
+        if rapidapi_missed:
             tasks.append(asyncio.create_task(
                 self._start_and_fetch(ACTOR_IG_PROFILE, {
-                    "usernames": uncached_ig,
+                    "usernames": rapidapi_missed,
                     "includeAboutSection": True,
                 }, kind="ig-profile")
             ))
 
-        results = await asyncio.gather(*tasks)
+        # TT profiles via Apify (unchanged)
+        if uncached_tt:
+            print(f"  → TT clockworks profile-only ×{len(uncached_tt)}")
+            tasks.append(asyncio.create_task(
+                self._start_and_fetch(ACTOR_TT_PROFILE, {
+                    "profiles": uncached_tt,
+                    "profileScrapeSections": ["videos"],
+                    "profileSorting": "latest",
+                    "resultsPerPage": 1,
+                    "shouldDownloadAvatars": False,
+                    "shouldDownloadCovers": False,
+                    "shouldDownloadSlideshowImages": False,
+                    "shouldDownloadVideos": False,
+                }, kind="tt-profile")
+            ))
 
-        tt_profiles: dict = {}
-        ig_profiles: dict = {}
+        if tasks:
+            results = await asyncio.gather(*tasks)
+        else:
+            results = []
 
         for kind, items in results:
-            if kind == "tt-profile":
+            if kind == "ig-profile":
+                for p in items:
+                    username = p.get("username")
+                    if not username or username in ig_profiles:
+                        continue
+                    about_country = (p.get("about") or {}).get("country", "")
+                    if about_country == "Germany":
+                        region = {"region": "DE", "city": "about.country"}
+                    elif about_country == "Austria":
+                        region = {"region": "AT", "city": "about.country"}
+                    else:
+                        region = detect_region(p.get("biography", ""))
+                    ig_profiles[username] = {
+                        "name": p["username"],
+                        "fullName": p.get("fullName", ""),
+                        "fans": p.get("followersCount", 0),
+                        "posts": p.get("postsCount", 0),
+                        "bio": p.get("biography", ""),
+                        "category": p.get("businessCategoryName"),
+                        "private": p.get("private", False),
+                        "region": region,
+                        "latestPosts": p.get("latestPosts", []),
+                    }
+            elif kind == "tt-profile":
                 for v in items:
                     name = self._safe_get(v, "authorMeta.name", "authorMeta", "name")
                     if not name or name in tt_profiles:
@@ -416,65 +483,13 @@ class Pipeline:
                         "private": self._safe_get(v, "authorMeta.privateAccount", "authorMeta", "privateAccount") or False,
                         "region": detect_region(bio),
                     }
-            else:
-                for p in items:
-                    username = p.get("username")
-                    if not username:
-                        continue  # skip malformed entries
-                    about_country = (p.get("about") or {}).get("country", "")
-                    if about_country == "Germany":
-                        region = {"region": "DE", "city": "about.country"}
-                    elif about_country == "Austria":
-                        region = {"region": "AT", "city": "about.country"}
-                    else:
-                        region = detect_region(p.get("biography", ""))
 
-                    ig_profiles[username] = {
-                        "name": p["username"],
-                        "fullName": p.get("fullName", ""),
-                        "fans": p.get("followersCount", 0),
-                        "posts": p.get("postsCount", 0),
-                        "bio": p.get("biography", ""),
-                        "category": p.get("businessCategoryName"),
-                        "private": p.get("private", False),
-                        "region": region,
-                        "latestPosts": p.get("latestPosts", []),
-                    }
-
-        # ── Save fresh profile results to cache ──
+        # ── Save fresh profiles to cache ──
         if is_cache_enabled():
             for name, profile in tt_profiles.items():
                 set_cache(cache_key("profile", "TT", name), profile)
             for name, profile in ig_profiles.items():
                 set_cache(cache_key("profile", "IG", name), profile)
-
-        # Playwright fallback for IG users Apify missed
-        missed_ig = [u for u in uncached_ig if u not in ig_profiles]
-        if missed_ig:
-            print(f"\n   🔄 Apify 漏了 {len(missed_ig)} 个 IG 账号，Playwright 兜底...")
-            for u in missed_ig:
-                sys.stdout.write(f"     → {u} ... ")
-                sys.stdout.flush()
-                fallback = await self._scrape_ig_fallback(u)
-                if fallback:
-                    # _scrape_ig_fallback doesn't return "about" — always use bio
-                    region = detect_region(fallback.get("biography", ""))
-                    profile = {
-                        "name": fallback["username"],
-                        "fullName": fallback.get("fullName", ""),
-                        "fans": fallback.get("followersCount", 0),
-                        "posts": fallback.get("postsCount", 0),
-                        "bio": fallback.get("biography", ""),
-                        "category": fallback.get("businessCategoryName"),
-                        "private": fallback.get("private", False),
-                        "region": region,
-                        "latestPosts": fallback.get("latestPosts", []),
-                    }
-                    ig_profiles[u] = profile
-                    if is_cache_enabled():
-                        set_cache(cache_key("profile", "IG", u), profile)
-                else:
-                    print("❌")
 
         # ── Merge cached profiles ──
         ig_profiles.update(cached_ig)

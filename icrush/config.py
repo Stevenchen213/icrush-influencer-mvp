@@ -75,6 +75,9 @@ FEISHU_REVIEW_BASE_ID: str = os.environ.get("FEISHU_REVIEW_BASE_ID", FEISHU_RESU
 FEISHU_REVIEW_TABLE_ID: str = os.environ.get("FEISHU_REVIEW_TABLE_ID", "")
 
 # === KOL 查重 API（实习生部署） ===
+RAPIDAPI_KEY: str = os.environ.get("RAPIDAPI_KEY", "")
+
+# === KOL 查重 API（实习生部署） ===
 DEDUP_API_URL: str = os.environ.get(
     "DEDUP_API_URL",
     "https://fc-toolplatform-wlmnvexxpg.cn-hangzhou.fcapp.run/api/koc-dedup",

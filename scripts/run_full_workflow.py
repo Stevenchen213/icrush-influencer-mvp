@@ -27,7 +27,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = os.getenv("PYTHON_EXE") or sys.executable
 NODE = "node"
 CDP_URL = "http://127.0.0.1:9222"
-EXTRACT_SCRIPT = ROOT / "scripts" / "fetch_similar_accounts_v3.mjs"
+EXTRACT_SCRIPT = ROOT / "scripts" / "fetch_similar_accounts.py"
+EXTRACT_SCRIPT_CDP = ROOT / "scripts" / "fetch_similar_accounts_v3.mjs"
 ENSURE_CDP = ROOT / "scripts" / "ensure_chrome_cdp.py"
 RUN_BATCH = ROOT / "scripts" / "run_batch.py"
 COMBINED_INPUT = ROOT / "data" / "input_similar_combined.txt"
@@ -70,20 +71,14 @@ def step_ensure_cdp() -> bool:
 
 
 def step_extract(seeds: list[str]) -> bool:
-    """Run similar accounts extraction with retry on failure."""
+    """Run similar accounts extraction. RapidAPI first, CDP fallback."""
     for attempt in range(MAX_RETRIES):
-        log(f"Extracting similar accounts (attempt {attempt + 1}/{MAX_RETRIES})...")
-
-        # Quick CDP check before running
-        if not is_cdp_alive():
-            log("CDP lost, re-ensuring...")
-            if not step_ensure_cdp():
-                return False
-
-        cmd = [NODE, str(EXTRACT_SCRIPT), *seeds]
+        # ── Try RapidAPI first ──
+        log(f"Extracting similar accounts via RapidAPI (attempt {attempt + 1}/{MAX_RETRIES})...")
+        cmd = [PYTHON, str(EXTRACT_SCRIPT), *seeds]
         result = subprocess.run(
             cmd, cwd=str(ROOT), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=7200,
+            encoding="utf-8", errors="replace", timeout=300,
         )
         if result.stdout.strip():
             print(result.stdout.strip())
@@ -91,28 +86,47 @@ def step_extract(seeds: list[str]) -> bool:
             print(result.stderr.strip(), file=sys.stderr)
 
         if result.returncode == 0:
-            log("Extraction complete.")
-
-            # Check if we actually got results
             if COMBINED_INPUT.exists():
                 lines = COMBINED_INPUT.read_text(encoding="utf-8").strip().split("\n")
                 count = len([l for l in lines if l.startswith("http")])
                 if count > 0:
-                    log(f"Got {count} accounts, proceeding to pipeline.")
+                    log(f"RapidAPI: {count} accounts, proceeding.")
                     return True
-                else:
-                    log("0 accounts extracted (all seeds skipped).")
-                    return False  # Not a failure, just no results
-            else:
-                log(f"Extraction claimed success but {COMBINED_INPUT} not found.")
-                return False
 
-        log(f"Extraction failed (exit {result.returncode}), stderr: {result.stderr[:200]}")
+        # ── RapidAPI failed → fallback to CDP ──
+        log("RapidAPI failed or 0 accounts — fallback to CDP browser...")
+
+        # Ensure CDP
+        if not is_cdp_alive():
+            log("CDP lost, re-ensuring...")
+            if not step_ensure_cdp():
+                log("CDP unavailable, skipping fallback.")
+                continue
+
+        cmd_cdp = [NODE, str(EXTRACT_SCRIPT_CDP), *seeds]
+        result_cdp = subprocess.run(
+            cmd_cdp, cwd=str(ROOT), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=7200,
+        )
+        if result_cdp.stdout.strip():
+            print(result_cdp.stdout.strip())
+        if result_cdp.stderr.strip():
+            print(result_cdp.stderr.strip(), file=sys.stderr)
+
+        if result_cdp.returncode == 0:
+            log("CDP extraction complete.")
+            if COMBINED_INPUT.exists():
+                lines = COMBINED_INPUT.read_text(encoding="utf-8").strip().split("\n")
+                count = len([l for l in lines if l.startswith("http")])
+                if count > 0:
+                    log(f"CDP: {count} accounts, proceeding.")
+                    return True
+
+        log(f"Both methods failed on attempt {attempt + 1}.")
         if attempt < MAX_RETRIES - 1:
             delay = RETRY_DELAY_BASE * (2 ** attempt)
             log(f"Retry in {delay}s (restarting Chrome CDP)...")
             time.sleep(delay)
-            # Restart Chrome CDP — most failures are WebSocket timeout
             subprocess.run([PYTHON, str(ENSURE_CDP), "--restart"], cwd=str(ROOT),
                            capture_output=True, timeout=30)
 
@@ -254,12 +268,7 @@ def main():
         print(f"# BATCH {bi+1}/{len(batches)}: {', '.join(batch)}")
         print(f"{'#' * 55}")
 
-        # Stage 1: Ensure CDP
-        if not step_ensure_cdp():
-            print("❌ CDP 不可用，终止后续批次")
-            sys.exit(1)
-
-        # Stage 2: Extract similar accounts (this batch only)
+        # Stage 1: Extract similar accounts (RapidAPI, no CDP needed)
         if not step_extract(batch):
             print(f"❌ Batch {bi+1} 提取失败，继续下一批")
             total_fail += 1
